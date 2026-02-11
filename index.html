@@ -601,15 +601,6 @@
             this.renderGrid();
         },
 
-        // Helper: Converts Appwrite 'View' URL to a lightweight 'Preview' URL
-        getOptimizedThumb: function(url) {
-            if (url && url.includes('/view')) {
-                // Switches to preview mode, resizes to width 600px, converts to WebP, 70% quality
-                return url.replace('/view', '/preview') + '&width=600&output=webp&quality=70';
-            }
-            return url;
-        },
-
         renderGrid: function() {
             const grid = document.getElementById('video-grid');
             grid.innerHTML = '';
