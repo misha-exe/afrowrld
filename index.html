@@ -304,7 +304,7 @@
     <div id="admin-login" class="view">
         <div class="nav-bar"><button class="back-link" onclick="app.handleBack()"><svg viewBox="0 0 24 24" stroke="currentColor"><polyline points="15 18 9 12 15 6"></polyline></svg> Back</button></div>
         <div class="container fade-in">
-            <h2 style="text-align: center; margin-top: 40px; margin-bottom: 24px;">Sign in</h2>
+            <h2 style="text-align: center; margin-top: 40px; margin-bottom: 24px;">Sign in to your account</h2>
             <div class="admin-form">
                 <div class="input-group">
                     <span class="input-label">Email</span>
@@ -901,19 +901,57 @@
         generateThumbnail: function(videoUrl) {
             return new Promise((resolve) => {
                 const video = document.createElement('video');
-                video.src = videoUrl; video.muted = true; video.currentTime = 1; 
+                video.src = videoUrl;
+                video.muted = true;
+                video.playsInline = true;
+                video.crossOrigin = "anonymous"; // Handle CORS if needed
+                video.currentTime = 2; // Capture at 2 seconds mark
+
                 video.onloadeddata = () => {
+                    // Small delay to ensure frame is rendered
                     setTimeout(() => {
                         const canvas = document.createElement('canvas');
-                        canvas.width = 640; canvas.height = 360;
+                        // Set target thumbnail size (16:9 High Quality)
+                        canvas.width = 1280;
+                        canvas.height = 720;
                         const ctx = canvas.getContext('2d');
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        resolve(canvas.toDataURL('image/jpeg'));
-                    }, 500);
+
+                        // --- SMART CROP LOGIC ---
+                        // This calculates how to crop the video to fit 16:9 without stretching
+                        const videoRatio = video.videoWidth / video.videoHeight;
+                        const targetRatio = canvas.width / canvas.height;
+                        
+                        let sx, sy, sWidth, sHeight;
+
+                        if (videoRatio > targetRatio) {
+                            // Video is wider than target: Crop sides
+                            sHeight = video.videoHeight;
+                            sWidth = sHeight * targetRatio;
+                            sy = 0;
+                            sx = (video.videoWidth - sWidth) / 2;
+                        } else {
+                            // Video is taller than target: Crop top/bottom
+                            sWidth = video.videoWidth;
+                            sHeight = sWidth / targetRatio;
+                            sx = 0;
+                            sy = (video.videoHeight - sHeight) / 2;
+                        }
+
+                        // Draw the cropped frame to canvas
+                        ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
+                        
+                        // Export high quality JPEG
+                        resolve(canvas.toDataURL('image/jpeg', 0.85));
+                    }, 800);
                 };
-                video.onerror = () => resolve("https://via.placeholder.com/640x360");
+                
+                video.onerror = () => {
+                    // Fallback if video fails to load
+                    resolve("https://via.placeholder.com/1280x720/000000/FFFFFF?text=No+Preview");
+                };
             });
         },
+        
         toggleMenu: function(e, id) { e.stopPropagation(); document.querySelectorAll('.video-menu-dropdown').forEach(d=>d.classList.remove('show')); document.getElementById(`menu-${id}`).classList.toggle('show'); },
         
         togglePassVisibility: function() { 
