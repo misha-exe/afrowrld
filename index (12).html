@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Afrowrld on Telegram</title>
+    <link rel="stylesheet" href="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.css" type="text/css"/>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0a0e27;
+            --bg-secondary: #1a1f3a;
+            --bg-card: #1e2442;
+            --bg-card-hover: #252b4a;
+            --accent-primary: #a855f7;
+            --accent-secondary: #7c3aed;
+            --accent-gradient: linear-gradient(135deg, #a855f7, #7c3aed);
+            --text-primary: #ffffff;
+            --text-secondary: #9ca3c3;
+            --text-muted: #6b7194;
+            --border-color: #2d3454;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --shadow-glow: 0 0 20px rgba(168, 85, 247, 0.3);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg-primary); color: var(--text-primary); overflow-x: hidden; height: 100vh; width: 100vw; }
+
+        /* Animations */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes popIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+
+        /* Header */
+        header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; background: var(--bg-secondary); position: sticky; top: 0; z-index: 100; border-bottom: 1px solid var(--border-color); }
+        .logo { font-weight: 900; font-size: 1.5rem; letter-spacing: -0.5px; background: var(--accent-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .icon-btn { background: var(--bg-card); border: 1px solid var(--border-color); padding: 10px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-md); transition: all 0.3s; }
+        .icon-btn svg { width: 22px; height: 22px; stroke: var(--text-secondary); stroke-width: 2; fill: none; }
+
+        /* Navigation */
+        .nav-bar { display: flex; align-items: center; gap: 12px; padding: 16px 20px; background: var(--bg-primary); border-bottom: 1px solid var(--border-color); }
+        .back-link { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text-secondary); border: none; background: none; font-size: 15px; }
+        .back-link svg { width: 20px; height: 20px; stroke: currentColor; stroke-width: 2.5; fill: none; }
+
+        /* Inputs */
+        .admin-form { display: flex; flex-direction: column; gap: 18px; max-width: 420px; margin: 20px auto; padding: 30px; background: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-color); }
+        .input-group { position: relative; width: 100%; }
+        .input-label { font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; display: block; text-transform: uppercase; }
+        input, select, textarea { width: 100%; padding: 14px 16px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); outline: none; color: var(--text-primary); font-size: 14px; }
+        input:focus { border-color: var(--accent-primary); background: var(--bg-primary); }
+        
+        /* Buttons */
+        .btn-primary { background: var(--accent-gradient); color: white; border: none; padding: 14px; border-radius: var(--radius-md); font-weight: 700; cursor: pointer; width: 100%; box-shadow: var(--shadow-glow); display: flex; justify-content: center; gap: 8px; }
+        .btn-outline { background: transparent; border: 2px solid var(--border-color); color: var(--text-primary); margin-top: 10px; }
+
+        /* Tabs */
+        .tab-container { display: flex; padding: 6px; background: var(--bg-secondary); border-radius: var(--radius-lg); margin: 20px; border: 1px solid var(--border-color); }
+        .tab { flex: 1; text-align: center; padding: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; border-radius: var(--radius-md); transition: 0.3s; font-size: 14px; }
+        .tab.active { color: var(--text-primary); background: var(--accent-gradient); }
+
+        /* Video Grid */
+        .video-grid { 
+    display: grid; 
+    grid-template-columns: repeat(2, 1fr); 
+    gap: 20px 15px; 
+    padding: 15px; 
+        }
+        .video-card { 
+    background: transparent; 
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    cursor: pointer; 
+    transition: transform 0.2s ease-in-out;
+    position: relative;
+    box-shadow: none;
+}
+
+.video-card:hover { transform: translateY(-5px); }
+
+        .video-card img { 
+    width: 100%; 
+    aspect-ratio: 16 / 9; /* Forces 16:9 ratio regardless of source */
+    object-fit: cover;    /* Crops the image to fill the ratio instead of squishing it */
+    object-position: center;
+    display: block;
+    border-radius: 8px; /* Matching nsty border radius */
+    background-color: #000;
+    border: 1px solid var(--border-color);
+        }
+
+.thumb-container { 
+    width: 100%; 
+    height: 100%; 
+    background: #000; 
+}
+
+.thumb-container img { 
+    width: 100%; 
+    height: 100%; 
+    /* This is the MAGIC: it crops the video frame to fill 
+       the box without stretching/compressing the people inside */
+    object-fit: cover; 
+    object-position: center; 
+    display: block;
+}
+
+.video-info { 
+    position: static; 
+    padding: 10px 5px; 
+    background: transparent; 
+}
+
+.video-title { 
+    color: var(--text-secondary); 
+    font-size: 0.9rem; 
+    font-weight: 500; 
+    line-height: 1.3; 
+    display: -webkit-box; 
+    -webkit-line-clamp: 2; 
+    -webkit-box-orient: vertical; 
+    overflow: hidden; 
+    text-shadow: none;
+    margin-right: 0;
+}
+
+/* Responsive Grid logic from stylest.css */
+@media (min-width: 768px) { .video-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1200px) { .video-grid { grid-template-columns: repeat(4, 1fr); } }
+
+        /* Player */
+        #player-wrapper { width: 100%; background: #000; position: sticky; top: 0; z-index: 50; aspect-ratio: 16/9; }
+        .player-meta { padding: 24px; background: var(--bg-card); border-radius: 0 0 var(--radius-lg) var(--radius-lg); margin-bottom: 24px; border: 1px solid var(--border-color); border-top: none; }
+        .section-header { font-size: 1.2rem; font-weight: 800; padding: 0 20px; margin-bottom: 18px; display: flex; align-items: center; gap: 12px; }
+        .section-header::before { content: ''; display: block; width: 4px; height: 20px; background: var(--accent-gradient); border-radius: 2px; }
+
+        /* Dashboard */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 24px; }
+        .stat-card { background: var(--bg-card); padding: 20px; border-radius: var(--radius-lg); border: 1px solid var(--border-color); text-align: center; }
+        .stat-num { font-size: 24px; font-weight: 900; color: var(--accent-primary); }
+        .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; margin-top: 5px; }
+        .country-list { text-align: left; margin-top: 10px; }
+        .country-item { display: flex; justify-content: space-between; font-size: 13px; padding: 10px 0; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); }
+        
+        .dashboard-section {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+        }
+        .dash-header {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+
+        /* Ad List in Dashboard */
+        .ad-link-row { margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px dashed var(--border-color); }
+        .click-count { font-size: 12px; color: var(--success); font-weight: bold; margin-top: 5px; text-align: right; }
+
+        /* Video List */
+        .video-list-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border-color); }
+        .video-list-info { display: flex; align-items: center; gap: 12px; flex: 1; overflow: hidden; }
+        .mini-thumb { width: 60px; height: 36px; object-fit: cover; border-radius: 6px; background: #333; flex-shrink: 0; }
+        .v-title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .menu-btn { background: none; border: none; color: var(--text-secondary); padding: 5px; }
+        
+        .video-menu-dropdown { position: absolute; right: 20px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; z-index: 20; display: none; box-shadow: 0 5px 20px rgba(0,0,0,0.5); }
+        .video-menu-dropdown.show { display: block; animation: fadeIn 0.2s; }
+        .menu-option { padding: 12px 16px; display: flex; gap: 10px; color: white; background: none; border: none; width: 100%; text-align: left; font-size: 13px; }
+        .menu-option.danger { color: var(--danger); }
+
+        /* Popup & Gate */
+        #custom-popup, #age-gate { position: fixed; inset: 0; background: rgba(10,14,39,0.9); z-index: 6000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+        #age-gate { background: var(--bg-primary); z-index: 5000; flex-direction: column; }
+        .popup-card, .gate-card { background: var(--bg-card); padding: 30px; border-radius: var(--radius-lg); border: 1px solid var(--border-color); max-width: 340px; text-align: center; animation: popIn 0.3s; }
+        
+        /* Ad Overlay - Fixed Z-Index */
+        #ad-view { 
+            position: fixed; 
+            inset: 0; 
+            background: #000; 
+            z-index: 2147483647 !important; /* Max Z-Index to stay on top */
+            display: none; 
+        }
+        #ad-frame { width: 100%; height: 100%; border: none; }
+        #ad-control-box { position: absolute; top: 20px; right: 20px; z-index: 2147483647; }
+        .ad-circle-btn { width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,0.7); color: white; border: 2px solid white; display: flex; align-items: center; justify-content: center; font-weight: 800; cursor: default; pointer-events: none; }
+        .ad-circle-btn.closable { background: var(--accent-gradient); border-color: var(--accent-primary); cursor: pointer; pointer-events: auto; }
+        .ad-loader { width: 30px; height: 30px; border: 4px solid rgba(255,255,255,0.2); border-top-color: var(--accent-primary); border-radius: 50%; animation: spin 1s linear infinite; }
+
+        /* Password Toggle */
+        .password-toggle {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .password-toggle:hover { color: var(--text-primary); }
+
+        .view { display: none; padding-bottom: 80px; }
+        .view.active { display: block; }
+    </style>
+    
+    <script src="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.js"></script>
+</head>
+<body>
+
+    <!-- Popup -->
+    <div id="custom-popup">
+        <div class="popup-card">
+            <div class="popup-icon" id="pop-icon"></div>
+            <div class="popup-title" id="pop-title"></div>
+            <div class="popup-msg" id="pop-msg"></div>
+            <div class="popup-actions" id="pop-actions">
+                <button class="btn-primary" onclick="app.closePopup()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Age Gate -->
+    <div id="age-gate" style="display: flex;">
+        <div class="gate-card fade-in">
+            🔞<div class="logo" style="font-size: 2rem; margin-bottom: 15px;">💦AFROWORLD💦</div>
+            <p style="color:var(--text-secondary); margin-bottom: 25px;">Free and Premium Adult content. You must be 18+ to enter.</p>
+            <button class="btn-primary" onclick="app.dismissAgeGate()">I AM 18 OR OLDER – ENTER</button>
+        </div>
+    </div>
+
+    <!-- Ad Overlay -->
+    <div id="ad-view">
+        <div id="ad-control-box"></div>
+        <iframe id="ad-frame"></iframe>
+    </div>
+
+    <!-- Header -->
+    <header id="main-header">
+        <div class="logo"><span>🔞 </span>AFROWORLD</div>
+        <button class="icon-btn" onclick="app.navigateTo('admin-login')">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+    </header>
+
+    <!-- Main View -->
+    <main id="home-view" class="view active">
+        <div class="tab-container">
+            <div class="tab active" onclick="app.switchTab('foryou')">For You</div>
+            <div class="tab" onclick="app.switchTab('explore')">Explore</div>
+        </div>
+        <div id="video-grid" class="video-grid fade-in"></div>
+    </main>
+
+    <!-- Player View -->
+    <div id="player-view" class="view">
+        <div class="nav-bar">
+            <button class="back-link" onclick="app.handleBack()">
+                <svg viewBox="0 0 24 24" stroke="currentColor"><polyline points="15 18 9 12 15 6"></polyline></svg> Back
+            </button>
+        </div>
+        <div id="player-wrapper">
+            <video id="fluid-player" style="width: 100%; height: 100%;" type="video/mp4"></video>
+        </div>
+        <div class="player-meta">
+            <h2 id="player-title"></h2>
+            <p id="player-desc" style="margin-top:8px;"></p>
+        </div>
+        <div class="section-header">Related Videos</div>
+        <div id="related-grid" class="video-grid"></div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="admin-dashboard" class="view">
+        <div class="nav-bar">
+            <button class="back-link" onclick="app.handleBack()">
+                <svg viewBox="0 0 24 24" stroke="currentColor"><polyline points="15 18 9 12 15 6"></polyline></svg> Logout
+            </button>
+        </div>
+        <div class="container fade-in" style="padding-top: 24px;">
+            <h1 style="margin-bottom: 24px; font-size: 1.8rem;">Dashboard</h1>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-num" id="stat-views">0</div>
+                    <div class="stat-label">Total Views</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-num" id="stat-clicks">0</div>
+                    <div class="stat-label">Total Ad Clicks</div>
+                </div>
+                <div class="stat-card" style="grid-column: span 2; text-align: left;">
+                    <div style="font-size: 15px; font-weight:800; color:var(--text-primary); margin-bottom:8px;">Top Countries</div>
+                    <div id="stat-countries-list" class="country-list"></div>
+                </div>
+            </div>
+
+            <div class="dashboard-section">
+                <div class="dash-header">Ad Rotation Settings (Max 4)</div>
+                <div id="ad-links-container">
+                    <!-- Injected by JS -->
+                </div>
+                <button class="btn-primary" style="margin-top:14px; padding: 12px;" onclick="app.saveAdSettings()">Save Changes</button>
+            </div>
+
+            <div class="dashboard-section">
+                <div class="dash-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <span>Video Library</span>
+                    <button class="btn-primary" style="width: auto; padding: 8px 18px; font-size: 13px;" onclick="app.navigateTo('admin-upload')">+ New</button>
+                </div>
+                <div id="admin-video-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Login -->
+    <div id="admin-login" class="view">
+        <div class="nav-bar"><button class="back-link" onclick="app.handleBack()"><svg viewBox="0 0 24 24" stroke="currentColor"><polyline points="15 18 9 12 15 6"></polyline></svg> Back</button></div>
+        <div class="container fade-in">
+            <h2 style="text-align: center; margin-top: 40px; margin-bottom: 24px;">Sign in to your account</h2>
+            <div class="admin-form">
+                <div class="input-group">
+                    <span class="input-label">Email</span>
+                    <input type="text" id="admin-email" placeholder="Enter email address">
+                </div>
+                <div class="input-group">
+                    <span class="input-label">Password</span>
+                    <div style="position: relative; width: 100%;">
+                        <input type="password" id="admin-pass" placeholder="Enter password">
+                        <button class="password-toggle" onclick="app.togglePassVisibility()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                    </div>
+                </div>
+                <button class="btn-primary" onclick="app.loginAdmin()">Login</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload View -->
+    <div id="admin-upload" class="view">
+        <div class="nav-bar"><button class="back-link" onclick="app.handleBack()"><svg viewBox="0 0 24 24" stroke="currentColor"><polyline points="15 18 9 12 15 6"></polyline></svg> Back</button></div>
+        <div class="container fade-in">
+            <h2 style="text-align: center; margin-top: 30px;">Upload Content</h2>
+            <div class="admin-form">
+                <div class="input-group">
+                    <span class="input-label">Video Title</span>
+                    <input type="text" id="vid-title" placeholder="Video Title">
+                </div>
+                
+                <div class="input-group">
+                    <span class="input-label">Description (Keywords for For You)</span>
+                    <textarea id="vid-desc" placeholder="e.g. Ebony, Latina, Blonde..."></textarea>
+                </div>
+
+                <div class="input-group">
+                    <span class="input-label">Thumbnail Image</span>
+                    <input type="file" id="thumb-file" accept="image/*">
+                </div>
+
+                <div class="input-group">
+                    <span class="input-label">Video File</span>
+                    <input type="file" id="vid-file" accept="video/*">
+                </div>
+
+                <p id="upload-status" style="font-size: 14px; color: var(--accent-primary); text-align: center;"></p>
+                <button class="btn-primary" onclick="app.handleUpload()">Upload</button>
+            </div>
+        </div>
+    </div>
+
+<script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1"></script>
+
+<script>
+    const { Client, Account, Databases, Storage, ID, Query } = Appwrite;
+
+    // --- CONFIGURATION ---
+    const APPWRITE_CONFIG = {
+        projectId: "698b67be00091ef13ccc",
+        databaseId: "698b68930019505651a3",
+        videoCollectionId: "videos",
+        configCollectionId: "config",
+        bucketId: "698b680f001fa8af7e0b"       
+    };
+
+    const client = new Client().setEndpoint('https://cloud.appwrite.io/v1').setProject(APPWRITE_CONFIG.projectId);
+    const account = new Account(client);
+    const databases = new Databases(client);
+    const storage = new Storage(client);
+
+    // --- STATE ---
+    let ALL_VIDEOS = [];
+    let FILTERED_VIDEOS = { foryou: [], explore: [] };
+    
+    let AD_CONFIG = [
+        { url: "", clicks: 0 }, 
+        { url: "", clicks: 0 }, 
+        { url: "", clicks: 0 }, 
+        { url: "", clicks: 0 }
+    ];
+    
+    let STATS = { totalViews: 0, totalClicks: 0, countries: {} };
+    let SESSION = { userRegion: 'ROW', videosClicked: 0, userCountryName: 'Unknown' };
+
+    const app = {
+        currentTab: 'foryou',
+        currentView: 'home-view',
+        history: [],
+        adActive: false,
+        adClosable: false,
+        fluidInstance: null,
+        adNextUrl: null, 
+        adNextIndex: -1, 
+
+        init: async function() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.ready();
+                window.Telegram.WebApp.expand();
+                window.Telegram.WebApp.BackButton.onClick(app.handleBack);
+            }
+
+            await this.detectLocation();
+            await this.refreshData();
+            app.renderGrid();
+            window.onclick = (e) => {
+                if (!e.target.closest('.menu-btn')) {
+                    document.querySelectorAll('.video-menu-dropdown').forEach(d => d.classList.remove('show'));
+                }
+            }
+        },
+
+        detectLocation: async function() {
+            try {
+                const res = await fetch('https://ipapi.co/json/');
+                const data = await res.json();
+                SESSION.userCountryName = data.country_name || "Unknown";
+                const afroCodes = ['NG', 'GH', 'KE', 'ZA', 'JM', 'BB', 'TT', 'BS', 'UG', 'ZW', 'TZ'];
+                SESSION.userRegion = afroCodes.includes(data.country_code) ? 'AFRO' : 'ROW';
+            } catch (e) {
+                console.log("Loc detect failed");
+            }
+        },
+        
+        shuffleArray: function(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        },
+
+        refreshData: async function() {
+            try {
+                // --- 1. CONFIG INITIALIZATION (Ads) ---
+                try {
+                    const confDoc = await databases.getDocument(
+                        APPWRITE_CONFIG.databaseId, 
+                        APPWRITE_CONFIG.configCollectionId, 
+                        'main'
+                    );
+                    if (confDoc.adJson) {
+                        const parsed = JSON.parse(confDoc.adJson);
+                        // Merge saved data with default structure
+                        AD_CONFIG = AD_CONFIG.map((def, i) => parsed[i] || def);
+                    }
+                } catch(e) { 
+                    // IF CONFIG DOES NOT EXIST, CREATE IT NOW
+                    console.log("Config doc not found. Creating 'main'...");
+                    try {
+                        await databases.createDocument(
+                            APPWRITE_CONFIG.databaseId, 
+                            APPWRITE_CONFIG.configCollectionId, 
+                            'main', 
+                            { 
+                                adJson: JSON.stringify(AD_CONFIG),
+                                adLink: "https://google.com" // Placeholder required by DB
+                            }
+                        );
+                    } catch(createErr) { console.error("Config Creation Failed:", createErr); }
+                }
+
+                // --- 2. STATS INITIALIZATION (Views/Clicks/Countries) ---
+                try {
+                    const statDoc = await databases.getDocument(
+                        APPWRITE_CONFIG.databaseId, 
+                        'stats', 
+                        'general'
+                    );
+                    
+                    if (statDoc) {
+                        STATS.totalViews = statDoc.totalViews || 0;
+                        STATS.totalClicks = statDoc.totalClicks || 0;
+                        STATS.countries = statDoc.countries ? JSON.parse(statDoc.countries) : {};
+                    }
+                } catch(e) {
+                    // IF STATS DOC DOES NOT EXIST, CREATE IT NOW
+                    console.log("Stats doc not found. Creating 'general'...");
+                    try {
+                        await databases.createDocument(
+                            APPWRITE_CONFIG.databaseId, 
+                            'stats', 
+                            'general', 
+                            {
+                                totalViews: 0, 
+                                totalClicks: 0, 
+                                countries: "{}" 
+                            }
+                        );
+                    } catch(createErr) { console.error("Stats Creation Failed:", createErr); }
+                }
+
+                // --- 3. FETCH VIDEOS ---
+                const response = await databases.listDocuments(
+                    APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.videoCollectionId,
+                    [Query.orderDesc('$createdAt')]
+                );
+
+                ALL_VIDEOS = response.documents.map(doc => ({
+                    id: doc.$id,
+                    title: doc.title,
+                    desc: (doc.desc || "").toLowerCase(),
+                    url: doc.url,
+                    thumb: doc.thumb,
+                    views: doc.views || 0
+                }));
+
+                // Shuffle & Filter
+                this.shuffleArray(ALL_VIDEOS);
+                this.filterContent();
+
+                if (app.currentView === 'admin-dashboard') app.renderAdminDashboard();
+
+            } catch (error) {
+                console.error("Data load error:", error);
+            }
+        },
+        
+        filterContent: function() {
+            FILTERED_VIDEOS.explore = [...ALL_VIDEOS];
+            const afroKeywords = ['ebony', 'mixed', 'interracial', 'black'];
+            const rowKeywords = ['blonde', 'redhead', 'latina', 'mixed', 'interracial', 'white'];
+            const targetKeywords = (SESSION.userRegion === 'AFRO') ? afroKeywords : rowKeywords;
+
+            FILTERED_VIDEOS.foryou = ALL_VIDEOS.filter(vid => targetKeywords.some(k => vid.desc.includes(k)));
+            if (FILTERED_VIDEOS.foryou.length === 0) FILTERED_VIDEOS.foryou = [...ALL_VIDEOS];
+        },
+
+        navigateTo: function(viewId) {
+            if (this.currentView === 'player-view' && viewId !== 'player-view') this.destroyPlayer();
+            if (viewId === 'admin-dashboard') this.refreshData();
+            this.history.push(this.currentView);
+            this.switchViewInternal(viewId);
+        },
+
+        switchViewInternal: function(viewId) {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            this.currentView = viewId;
+            const hideHeader = ['player-view', 'admin-login', 'admin-upload', 'admin-dashboard'].includes(viewId);
+            document.getElementById('main-header').style.display = hideHeader ? 'none' : 'flex';
+            window.scrollTo(0,0);
+        },
+
+        handleBack: function() {
+            if (app.adActive) { if (app.adClosable) app.closeAd(); return; }
+            if (app.currentView === 'home-view') {
+                if (window.Telegram && window.Telegram.WebApp) window.Telegram.WebApp.close();
+                return;
+            }
+            if (app.history.length > 0) {
+                const prev = app.history.pop();
+                if (app.currentView === 'player-view') app.destroyPlayer();
+                if (app.currentView === 'admin-dashboard') {
+                    account.deleteSession('current').then(() => app.switchViewInternal('home-view'));
+                } else {
+                    app.switchViewInternal(prev);
+                }
+            } else {
+                app.switchViewInternal('home-view');
+            }
+        },
+
+        switchTab: function(tab) {
+            this.currentTab = tab;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            this.renderGrid();
+        },
+
+        renderGrid: function() {
+    const grid = document.getElementById('video-grid');
+    grid.innerHTML = '';
+    const videos = FILTERED_VIDEOS[this.currentTab];
+    
+    if (!videos || videos.length === 0) {
+        grid.innerHTML = '<div style="grid-column:span 2; text-align:center; padding:20px; color:#666;">No videos found.</div>';
+        return;
+    }
+
+    videos.forEach(vid => {
+        const card = document.createElement('div');
+        card.className = 'video-card';
+        card.onclick = () => app.loadPlayer(vid);
+        // Updated HTML structure to match nsty
+        card.innerHTML = `
+            <img src="${vid.thumb}" alt="${vid.title}">
+            <div class="video-info">
+                <div class="video-title">${vid.title}</div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+},
+
+loadPlayer: function(vid) {
+            // 1. Session Click Tracking
+            SESSION.videosClicked++;
+            
+            // 2. Prepare Ad Data
+            const shouldShowAd = (SESSION.videosClicked % 2 !== 0);
+            app.adNextUrl = null;
+            app.adNextIndex = -1;
+
+            if (shouldShowAd) {
+                const activeAds = AD_CONFIG.map((ad, idx) => ({ ...ad, originalIdx: idx })).filter(a => a.url && a.url.trim().length > 5);
+                if (activeAds.length > 0) {
+                    const sequenceNum = Math.floor((SESSION.videosClicked + 1) / 2) - 1; 
+                    const cycleIndex = sequenceNum % activeAds.length;
+                    app.adNextUrl = activeAds[cycleIndex].url;
+                    app.adNextIndex = activeAds[cycleIndex].originalIdx;
+                }
+            }
+
+            // 3. DB Updates
+            databases.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, vid.id, { views: vid.views + 1 });
+            if (SESSION.userCountryName !== 'Unknown') {
+                STATS.countries[SESSION.userCountryName] = (STATS.countries[SESSION.userCountryName] || 0) + 1;
+                databases.updateDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general', {
+                    totalViews: STATS.totalViews + 1,
+                    countries: JSON.stringify(STATS.countries)
+                }).catch(e=>{});
+            }
+
+            // 4. UI Setup
+            this.navigateTo('player-view');
+            document.getElementById('player-title').innerText = vid.title;
+            document.getElementById('player-desc').innerText = vid.desc;
+            
+            const wrapper = document.getElementById('player-wrapper');
+            wrapper.innerHTML = '';
+            const videoEl = document.createElement('video');
+            videoEl.id = 'fluid-player';
+            videoEl.style.width = '100%';
+            videoEl.style.height = '100%';
+            videoEl.src = vid.url;
+            videoEl.poster = vid.thumb; // <--- ADDED THIS LINE (Sets the poster image)
+            wrapper.appendChild(videoEl);
+
+            this.fluidInstance = fluidPlayer('fluid-player', {
+                layoutControls: { 
+                    primaryColor: "#a855f7", 
+                    fillToContainer: true, 
+                    autoPlay: false,
+                    posterImage: vid.thumb // Explicitly set for Fluid Player config as well
+                } 
+            });
+
+            this.fluidInstance.on('play', function() {
+                if (app.adNextUrl && !app.adActive) {
+                    app.fluidInstance.pause();
+                    app.triggerAdSequence(app.adNextUrl, app.adNextIndex);
+                    app.adNextUrl = null;
+                }
+            });
+            
+            this.renderRelated(vid.id);
+        },
+        
+        triggerAdSequence: function(url, index) {
+            this.adActive = true;
+            this.adClosable = false;
+            
+            const adView = document.getElementById('ad-view');
+            const frame = document.getElementById('ad-frame');
+            const controlBox = document.getElementById('ad-control-box');
+            
+            adView.style.display = 'block'; 
+            frame.src = url;
+            controlBox.innerHTML = '<div class="ad-loader"></div>';
+
+            // --- TRACKING LOGIC ---
+            if (index > -1) {
+                // 1. Update Local State
+                AD_CONFIG[index].clicks++;
+                STATS.totalClicks++;
+
+                // 2. Save Specific Link Clicks to Config Collection
+                databases.updateDocument(
+                    APPWRITE_CONFIG.databaseId, 
+                    APPWRITE_CONFIG.configCollectionId, 
+                    'main', 
+                    { 
+                        adJson: JSON.stringify(AD_CONFIG),
+                        // Also update adLink to current first one to satisfy constraints
+                        adLink: AD_CONFIG[0].url || "https://google.com" 
+                    }
+                ).catch(e => console.log("Ad click save failed", e));
+
+                // 3. Save Total Clicks to Stats Collection
+                databases.updateDocument(
+                    APPWRITE_CONFIG.databaseId, 
+                    'stats', 
+                    'general', 
+                    { totalClicks: STATS.totalClicks }
+                ).catch(e => console.log("Stats save failed", e));
+            }
+            // ---------------------
+
+            setTimeout(() => {
+                let timeLeft = 5;
+                const updateTimer = () => { controlBox.innerHTML = `<div class="ad-circle-btn">${timeLeft}</div>`; };
+                updateTimer();
+                
+                const interval = setInterval(() => {
+                    timeLeft--;
+                    if(timeLeft > 0) {
+                        updateTimer();
+                    } else {
+                        clearInterval(interval);
+                        app.adClosable = true;
+                        controlBox.innerHTML = `<div class="ad-circle-btn closable" onclick="app.closeAd()">✕</div>`;
+                    }
+                }, 1000);
+            }, 2000);
+        },
+        closeAd: function() {
+            document.getElementById('ad-view').style.display = 'none';
+            document.getElementById('ad-frame').src = '';
+            this.adActive = false;
+            if(this.fluidInstance) this.fluidInstance.play();
+        },
+
+        renderRelated: function(currentId) {
+    const grid = document.getElementById('related-grid');
+    grid.innerHTML = '';
+    const list = ALL_VIDEOS.filter(v => v.id !== currentId).sort(() => 0.5 - Math.random()).slice(0, 4);
+    list.forEach(vid => {
+        const card = document.createElement('div');
+        card.className = 'video-card';
+        card.onclick = () => app.loadPlayer(vid);
+        // Updated HTML structure to match nsty
+        card.innerHTML = `
+            <img src="${vid.thumb}" alt="${vid.title}">
+            <div class="video-info">
+                <div class="video-title">${vid.title}</div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+},
+
+        destroyPlayer: function() {
+            if(this.fluidInstance) { this.fluidInstance.destroy(); this.fluidInstance = null; }
+        },
+
+        // --- ADMIN ---
+        loginAdmin: async function() {
+            const email = document.getElementById('admin-email').value;
+            const pass = document.getElementById('admin-pass').value;
+            try {
+                // Check if session exists (to handle 'session already active' error)
+                try {
+                    await account.get(); 
+                    // If we get here, user is already logged in
+                    app.navigateTo('admin-dashboard');
+                    return;
+                } catch(e) {
+                    // Not logged in, proceed to create session
+                }
+
+                await account.createEmailPasswordSession(email, pass);
+                app.navigateTo('admin-dashboard');
+            } catch (e) {
+                app.showPopup("Login Error", e.message, "");
+            }
+        },
+
+        renderAdminDashboard: function() {
+            document.getElementById('stat-views').innerText = STATS.totalViews;
+            document.getElementById('stat-clicks').innerText = STATS.totalClicks;
+            
+            const clist = document.getElementById('stat-countries-list');
+            clist.innerHTML = '';
+            const sortedC = Object.entries(STATS.countries || {}).sort((a,b)=>b[1]-a[1]).slice(0, 5);
+            if(sortedC.length === 0) clist.innerHTML = '<div class="empty-state">No data</div>';
+            else sortedC.forEach(([c, n]) => clist.innerHTML += `<div class="country-item"><span>${c}</span><span>${n}</span></div>`);
+
+            const adContainer = document.getElementById('ad-links-container');
+            adContainer.innerHTML = '';
+            AD_CONFIG.forEach((ad, idx) => {
+                adContainer.innerHTML += `
+                    <div class="ad-link-row">
+                        <div class="input-group">
+                            <span class="input-label">Ad Link ${idx + 1}</span>
+                            <input type="text" class="ad-url-input" data-index="${idx}" value="${ad.url}" placeholder="https://...">
+                        </div>
+                        <div class="click-count">Clicks: ${ad.clicks}</div>
+                    </div>
+                `;
+            });
+
+            const vlist = document.getElementById('admin-video-list');
+            vlist.innerHTML = '';
+            ALL_VIDEOS.forEach(vid => {
+                vlist.innerHTML += `
+                    <div class="video-list-item">
+                        <div class="video-list-info"><img src="${vid.thumb}" class="mini-thumb"><div class="v-title">${vid.title}</div></div>
+                        <div class="menu-container">
+                            <button class="menu-btn" onclick="app.toggleMenu(event, '${vid.id}')">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+                            </button>
+                            <div id="menu-${vid.id}" class="video-menu-dropdown">
+                                <button class="menu-option danger" onclick="app.deleteVideo('${vid.id}')">
+                                    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+        },
+
+        saveAdSettings: async function() {
+            // 1. Capture latest values from inputs
+            document.querySelectorAll('.ad-url-input').forEach(input => {
+                const idx = parseInt(input.dataset.index);
+                const newVal = input.value.trim();
+                
+                if (AD_CONFIG[idx].url !== newVal) {
+                    AD_CONFIG[idx].url = newVal;
+                    AD_CONFIG[idx].clicks = 0;
+                }
+            });
+
+            // 2. Prepare payload
+            // FIX: We send 'adLink' (using the first link) to satisfy the "Required" database rule.
+            // We also send 'adJson' which contains all 4 links for the rotation logic.
+            const payload = { 
+                adJson: JSON.stringify(AD_CONFIG),
+                adLink: AD_CONFIG[0].url && AD_CONFIG[0].url.length > 0 ? AD_CONFIG[0].url : "https://google.com" 
+            };
+
+            try {
+                // Attempt to UPDATE existing 'main' document
+                await databases.updateDocument(
+                    APPWRITE_CONFIG.databaseId, 
+                    APPWRITE_CONFIG.configCollectionId, 
+                    'main', 
+                    payload
+                );
+                app.showPopup("Success", "Settings Updated", "");
+            } catch(e) { 
+                // If Update fails (likely 404 Not Found or Attribute Missing), try to CREATE it
+                console.log("Update failed, attempting creation/check...", e);
+                
+                // If the error is about missing attribute 'adJson', warn the user
+                if(e.message.includes("adJson")) {
+                    return app.showPopup("Database Error", "You must create the 'adJson' String attribute in Appwrite Console!", "");
+                }
+
+                try {
+                    await databases.createDocument(
+                        APPWRITE_CONFIG.databaseId, 
+                        APPWRITE_CONFIG.configCollectionId, 
+                        'main', 
+                        payload
+                    );
+                    app.showPopup("Success", "Settings Initialized", "");
+                } catch(createErr) {
+                    console.error(createErr);
+                    app.showPopup("Error", createErr.message, "");
+                }
+            }
+            
+            // 3. Refresh Dashboard UI
+            app.renderAdminDashboard();
+        },
+        
+        handleUpload: async function() {
+            const title = document.getElementById('vid-title').value;
+            const desc = document.getElementById('vid-desc').value;
+            const thumbInput = document.getElementById('thumb-file');
+            const fileInput = document.getElementById('vid-file');
+            const btn = document.querySelector('#admin-upload .btn-primary');
+            const status = document.getElementById('upload-status');
+
+            if(!title || !fileInput.files[0] || !thumbInput.files[0]) {
+                return app.showPopup("Error", "Missing title, thumbnail, or video file", "");
+            }
+
+            btn.disabled = true;
+            status.innerText = "Uploading Content...";
+
+            try {
+                // 1. Upload Video
+                const videoFile = fileInput.files[0];
+                const videoUpload = await storage.createFile(APPWRITE_CONFIG.bucketId, ID.unique(), videoFile);
+                const videoUrl = storage.getFileView(APPWRITE_CONFIG.bucketId, videoUpload.$id);
+
+                // 2. Upload Thumbnail
+                const thumbFile = thumbInput.files[0];
+                const thumbUpload = await storage.createFile(APPWRITE_CONFIG.bucketId, ID.unique(), thumbFile);
+                const thumbUrl = storage.getFileView(APPWRITE_CONFIG.bucketId, thumbUpload.$id);
+
+                // 3. Create Document
+                await databases.createDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, ID.unique(), {
+                    title: title,
+                    category: 'general',
+                    desc: desc,
+                    url: videoUrl.href,
+                    thumb: thumbUrl.href, // Stores the cloud URL of the uploaded image
+                    views: 0,
+                    watchTime: 0
+                });
+
+                status.innerText = "Success!";
+                setTimeout(() => {
+                    btn.disabled = false;
+                    status.innerText = "";
+                    // Clear inputs
+                    document.getElementById('vid-title').value = "";
+                    document.getElementById('vid-desc').value = "";
+                    document.getElementById('vid-file').value = "";
+                    document.getElementById('thumb-file').value = "";
+                    app.navigateTo('admin-dashboard');
+                }, 1000);
+            } catch(e) {
+                console.error(e);
+                status.innerText = "Failed: " + e.message;
+                btn.disabled = false;
+            }
+        },
+
+        generateThumbnail: function(videoUrl) {
+    return new Promise((resolve) => {
+        const video = document.createElement('video');
+        video.src = videoUrl;
+        video.muted = true;
+        video.playsInline = true;
+        video.crossOrigin = "anonymous";
+        video.currentTime = 2; // Capture at 2 seconds
+
+        video.onloadeddata = () => {
+            setTimeout(() => {
+                const canvas = document.createElement('canvas');
+                // Set high quality landscape resolution
+                canvas.width = 1280;
+                canvas.height = 720;
+                const ctx = canvas.getContext('2d');
+
+                // Calculate ratios to center-crop (preventing compression)
+                const videoRatio = video.videoWidth / video.videoHeight;
+                const targetRatio = canvas.width / canvas.height;
+                
+                let sx, sy, sWidth, sHeight;
+
+                if (videoRatio > targetRatio) {
+                    // Source is wider (e.g. 21:9)
+                    sHeight = video.videoHeight;
+                    sWidth = sHeight * targetRatio;
+                    sx = (video.videoWidth - sWidth) / 2;
+                    sy = 0;
+                } else {
+                    // Source is taller (e.g. 9:16 TikTok style)
+                    sWidth = video.videoWidth;
+                    sHeight = sWidth / targetRatio;
+                    sx = 0;
+                    sy = (video.videoHeight - sHeight) / 2;
+                }
+
+                ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
+                // Export as high-quality JPEG
+                resolve(canvas.toDataURL('image/jpeg', 0.9));
+            }, 1000);
+        };
+        video.onerror = () => resolve("https://via.placeholder.com/1280x720/000?text=Error");
+    });
+},
+        
+        toggleMenu: function(e, id) { e.stopPropagation(); document.querySelectorAll('.video-menu-dropdown').forEach(d=>d.classList.remove('show')); document.getElementById(`menu-${id}`).classList.toggle('show'); },
+        
+        togglePassVisibility: function() { 
+            const i = document.getElementById('admin-pass'); 
+            const icon = document.querySelector('.password-toggle svg');
+            if(i.type === 'password') {
+                i.type = 'text';
+                icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+            } else {
+                i.type = 'password';
+                icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+            }
+        },
+        
+        deleteVideo: async function(id) {
+            if(confirm("Delete?")) {
+                try {
+                    await databases.deleteDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, id);
+                    app.refreshData();
+                } catch(e) {}
+            }
+        },
+        dismissAgeGate: function() { document.getElementById('age-gate').style.display='none'; app.updateBackButton(); },
+        showPopup: function(t, m, i) { document.getElementById('pop-title').innerText=t; document.getElementById('pop-msg').innerText=m; document.getElementById('custom-popup').style.display='flex'; },
+        closePopup: function() { document.getElementById('custom-popup').style.display='none'; }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => app.init());
+</script>
+</body>
+</html>
