@@ -67,26 +67,33 @@
         /* Video Grid */
         .video-grid { 
     display: grid; 
-    grid-template-columns: 1fr 1fr; 
-    gap: 16px;
-    padding: 0 16px; 
+    grid-template-columns: repeat(2, 1fr); 
+    gap: 20px 15px; 
+    padding: 15px; 
         }
         .video-card { 
-    background: var(--bg-card); 
-    border-radius: var(--radius-lg); 
-    overflow: hidden; 
+    background: transparent; 
+    border: none;
+    border-radius: 0;
+    overflow: visible;
     cursor: pointer; 
-    border: 1px solid var(--border-color);
-    position: relative; 
-    /* Strictly 16:9 Landscape ratio */
-    aspect-ratio: 16 / 9; 
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        }
-        .video-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    transition: transform 0.2s ease-in-out;
+    position: relative;
+    box-shadow: none;
 }
+
+.video-card:hover { transform: translateY(-5px); }
+
+        .video-card img { 
+    width: 100%; 
+    aspect-ratio: 16 / 9; /* Forces 16:9 ratio regardless of source */
+    object-fit: cover;    /* Crops the image to fill the ratio instead of squishing it */
+    object-position: center;
+    display: block;
+    border-radius: 8px; /* Matching nsty border radius */
+    background-color: #000;
+    border: 1px solid var(--border-color);
+        }
 
 .thumb-container { 
     width: 100%; 
@@ -105,26 +112,27 @@
 }
 
 .video-info { 
-    position: absolute; 
-    bottom: 0; 
-    left: 0; 
-    right: 0; 
-    padding: 12px;
-    /* Smooth gradient from bottom to top */
-    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 60%, transparent 100%); 
-    z-index: 2; 
+    position: static; 
+    padding: 10px 5px; 
+    background: transparent; 
 }
 
 .video-title { 
-    color: #ffffff; 
-    font-size: 0.85rem; 
-    font-weight: 700; 
-    line-height: 1.2; 
-    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis; /* Keeps titles on one smooth line */
+    color: var(--text-secondary); 
+    font-size: 0.9rem; 
+    font-weight: 500; 
+    line-height: 1.3; 
+    display: -webkit-box; 
+    -webkit-line-clamp: 2; 
+    -webkit-box-orient: vertical; 
+    overflow: hidden; 
+    text-shadow: none;
+    margin-right: 0;
 }
+
+/* Responsive Grid logic from stylest.css */
+@media (min-width: 768px) { .video-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1200px) { .video-grid { grid-template-columns: repeat(4, 1fr); } }
 
         /* Player */
         #player-wrapper { width: 100%; background: #000; position: sticky; top: 0; z-index: 50; aspect-ratio: 16/9; }
@@ -577,23 +585,29 @@
         },
 
         renderGrid: function() {
-            const grid = document.getElementById('video-grid');
-            grid.innerHTML = '';
-            const videos = FILTERED_VIDEOS[this.currentTab];
-            
-            if (!videos || videos.length === 0) {
-                grid.innerHTML = '<div style="grid-column:span 2; text-align:center; padding:20px; color:#666;">No videos found.</div>';
-                return;
-            }
+    const grid = document.getElementById('video-grid');
+    grid.innerHTML = '';
+    const videos = FILTERED_VIDEOS[this.currentTab];
+    
+    if (!videos || videos.length === 0) {
+        grid.innerHTML = '<div style="grid-column:span 2; text-align:center; padding:20px; color:#666;">No videos found.</div>';
+        return;
+    }
 
-            videos.forEach(vid => {
-                const card = document.createElement('div');
-                card.className = 'video-card';
-                card.onclick = () => app.loadPlayer(vid);
-                card.innerHTML = `<div class="thumb-container"><img src="${vid.thumb}"></div><div class="video-info"><div class="video-title">${vid.title}</div></div>`;
-                grid.appendChild(card);
-            });
-        },
+    videos.forEach(vid => {
+        const card = document.createElement('div');
+        card.className = 'video-card';
+        card.onclick = () => app.loadPlayer(vid);
+        // Updated HTML structure to match nsty
+        card.innerHTML = `
+            <img src="${vid.thumb}" alt="${vid.title}">
+            <div class="video-info">
+                <div class="video-title">${vid.title}</div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+},
 
         loadPlayer: function(vid) {
             // 1. Session Click Tracking
@@ -738,17 +752,23 @@
         },
 
         renderRelated: function(currentId) {
-            const grid = document.getElementById('related-grid');
-            grid.innerHTML = '';
-            const list = ALL_VIDEOS.filter(v => v.id !== currentId).sort(() => 0.5 - Math.random()).slice(0, 4);
-            list.forEach(vid => {
-                const card = document.createElement('div');
-                card.className = 'video-card';
-                card.onclick = () => app.loadPlayer(vid);
-                card.innerHTML = `<div class="thumb-container"><img src="${vid.thumb}"></div><div class="video-info"><div class="video-title">${vid.title}</div></div>`;
-                grid.appendChild(card);
-            });
-        },
+    const grid = document.getElementById('related-grid');
+    grid.innerHTML = '';
+    const list = ALL_VIDEOS.filter(v => v.id !== currentId).sort(() => 0.5 - Math.random()).slice(0, 4);
+    list.forEach(vid => {
+        const card = document.createElement('div');
+        card.className = 'video-card';
+        card.onclick = () => app.loadPlayer(vid);
+        // Updated HTML structure to match nsty
+        card.innerHTML = `
+            <img src="${vid.thumb}" alt="${vid.title}">
+            <div class="video-info">
+                <div class="video-title">${vid.title}</div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+},
 
         destroyPlayer: function() {
             if(this.fluidInstance) { this.fluidInstance.destroy(); this.fluidInstance = null; }
