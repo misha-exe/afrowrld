@@ -601,31 +601,52 @@
             this.renderGrid();
         },
 
+        // Helper: Converts Appwrite 'View' URL to a lightweight 'Preview' URL
+        getOptimizedThumb: function(url) {
+            if (url && url.includes('/view')) {
+                // Switches to preview mode, resizes to width 600px, converts to WebP, 70% quality
+                return url.replace('/view', '/preview') + '&width=600&output=webp&quality=70';
+            }
+            return url;
+        },
+
         renderGrid: function() {
-    const grid = document.getElementById('video-grid');
-    grid.innerHTML = '';
-    const videos = FILTERED_VIDEOS[this.currentTab];
-    
-    if (!videos || videos.length === 0) {
-        grid.innerHTML = '<div style="grid-column:span 2; text-align:center; padding:20px; color:#666;">No videos found.</div>';
-        return;
-    }
+            const grid = document.getElementById('video-grid');
+            grid.innerHTML = '';
+            const videos = FILTERED_VIDEOS[this.currentTab];
+            
+            if (!videos || videos.length === 0) {
+                grid.innerHTML = '<div style="grid-column:span 2; text-align:center; padding:20px; color:#666;">No videos found.</div>';
+                return;
+            }
 
-    videos.forEach(vid => {
-        const card = document.createElement('div');
-        card.className = 'video-card';
-        card.onclick = () => app.loadPlayer(vid);
-        // Updated HTML structure to match nsty
-        card.innerHTML = `
-            <img src="${vid.thumb}" alt="${vid.title}">
-            <div class="video-info">
-                <div class="video-title">${vid.title}</div>
-            </div>
-        `;
-        grid.appendChild(card);
-    });
-},
+            videos.forEach(vid => {
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.onclick = () => app.loadPlayer(vid);
+                
+                // OPTIMIZATION: Use the optimized thumb function here
+                const optimizedUrl = app.getOptimizedThumb(vid.thumb);
 
+                card.innerHTML = `
+                    <div class="thumb-container">
+                        <img src="${optimizedUrl}" loading="eager" alt="${vid.title}">
+                    </div>
+                    <div class="video-info">
+                        <div class="video-title">${vid.title}</div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+
+            // PRELOADER: Force browser to download top 6 images in background immediately
+            setTimeout(() => {
+                videos.slice(0, 6).forEach(v => {
+                    const img = new Image();
+                    img.src = app.getOptimizedThumb(v.thumb);
+                });
+            }, 50);
+        },
 loadPlayer: function(vid) {
             // 1. Session Click Tracking
             SESSION.videosClicked++;
@@ -755,23 +776,19 @@ loadPlayer: function(vid) {
         },
 
         renderRelated: function(currentId) {
-    const grid = document.getElementById('related-grid');
-    grid.innerHTML = '';
-    const list = ALL_VIDEOS.filter(v => v.id !== currentId).sort(() => 0.5 - Math.random()).slice(0, 4);
-    list.forEach(vid => {
-        const card = document.createElement('div');
-        card.className = 'video-card';
-        card.onclick = () => app.loadPlayer(vid);
-        // Updated HTML structure to match nsty
-        card.innerHTML = `
-            <img src="${vid.thumb}" alt="${vid.title}">
-            <div class="video-info">
-                <div class="video-title">${vid.title}</div>
-            </div>
-        `;
-        grid.appendChild(card);
-    });
-},
+            const grid = document.getElementById('related-grid');
+            grid.innerHTML = '';
+            const list = ALL_VIDEOS.filter(v => v.id !== currentId).sort(() => 0.5 - Math.random()).slice(0, 4);
+            list.forEach(vid => {
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.onclick = () => app.loadPlayer(vid);
+                // OPTIMIZATION: Use optimized thumb
+                const optimizedUrl = app.getOptimizedThumb(vid.thumb);
+                card.innerHTML = `<div class="thumb-container"><img src="${optimizedUrl}" loading="lazy"></div><div class="video-info"><div class="video-title">${vid.title}</div></div>`;
+                grid.appendChild(card);
+            });
+        },
 
         destroyPlayer: function() {
             if(this.fluidInstance) { this.fluidInstance.destroy(); this.fluidInstance = null; }
@@ -954,52 +971,6 @@ loadPlayer: function(vid) {
             }
         },
 
-        generateThumbnail: function(videoUrl) {
-    return new Promise((resolve) => {
-        const video = document.createElement('video');
-        video.src = videoUrl;
-        video.muted = true;
-        video.playsInline = true;
-        video.crossOrigin = "anonymous";
-        video.currentTime = 2; // Capture at 2 seconds
-
-        video.onloadeddata = () => {
-            setTimeout(() => {
-                const canvas = document.createElement('canvas');
-                // Set high quality landscape resolution
-                canvas.width = 1280;
-                canvas.height = 720;
-                const ctx = canvas.getContext('2d');
-
-                // Calculate ratios to center-crop (preventing compression)
-                const videoRatio = video.videoWidth / video.videoHeight;
-                const targetRatio = canvas.width / canvas.height;
-                
-                let sx, sy, sWidth, sHeight;
-
-                if (videoRatio > targetRatio) {
-                    // Source is wider (e.g. 21:9)
-                    sHeight = video.videoHeight;
-                    sWidth = sHeight * targetRatio;
-                    sx = (video.videoWidth - sWidth) / 2;
-                    sy = 0;
-                } else {
-                    // Source is taller (e.g. 9:16 TikTok style)
-                    sWidth = video.videoWidth;
-                    sHeight = sWidth / targetRatio;
-                    sx = 0;
-                    sy = (video.videoHeight - sHeight) / 2;
-                }
-
-                ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
-                // Export as high-quality JPEG
-                resolve(canvas.toDataURL('image/jpeg', 0.9));
-            }, 1000);
-        };
-        video.onerror = () => resolve("https://via.placeholder.com/1280x720/000?text=Error");
-    });
-},
-        
         toggleMenu: function(e, id) { e.stopPropagation(); document.querySelectorAll('.video-menu-dropdown').forEach(d=>d.classList.remove('show')); document.getElementById(`menu-${id}`).classList.toggle('show'); },
         
         togglePassVisibility: function() { 
