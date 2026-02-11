@@ -175,9 +175,9 @@
     <!-- Age Gate -->
     <div id="age-gate" style="display: flex;">
         <div class="gate-card fade-in">
-            <div class="logo" style="font-size: 2rem; margin-bottom: 15px;">AFROWRLD</div>
-            <p style="color:var(--text-secondary); margin-bottom: 25px;">Adult content. You must be 18+ to enter.</p>
-            <button class="btn-primary" onclick="app.dismissAgeGate()">I AM 18+ – ENTER</button>
+            🔞<div class="logo" style="font-size: 2rem; margin-bottom: 15px;">💦AFROWORLD💦</div>
+            <p style="color:var(--text-secondary); margin-bottom: 25px;">Free and Premium Adult content. You must be 18+ to enter.</p>
+            <button class="btn-primary" onclick="app.dismissAgeGate()">I AM 18 OR OLDER – ENTER</button>
         </div>
     </div>
 
@@ -189,7 +189,7 @@
 
     <!-- Header -->
     <header id="main-header">
-        <div class="logo">AFROWRLD</div>
+        <div class="logo"><span>🔞 </span>AFROWORLD</div>
         <button class="icon-btn" onclick="app.navigateTo('admin-login')">
             <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" stroke="currentColor"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </button>
@@ -385,26 +385,52 @@
 
         refreshData: async function() {
             try {
+                // 1. Fetch Config (Ad Links & Click Counts)
                 try {
-                    const confDoc = await databases.getDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.configCollectionId, 'main');
+                    // We use 'main' as the ID for the config document
+                    const confDoc = await databases.getDocument(
+                        APPWRITE_CONFIG.databaseId, 
+                        APPWRITE_CONFIG.configCollectionId, 
+                        'main'
+                    );
+                    
                     if (confDoc.adJson) {
                         const parsed = JSON.parse(confDoc.adJson);
+                        // Merge saved data with default structure to ensure 4 slots exist
+                        // This restores the 'clicks' count for each link
                         AD_CONFIG = AD_CONFIG.map((def, i) => parsed[i] || def);
                     }
-                } catch(e) { console.log("Config not loaded"); }
+                } catch(e) { 
+                    console.log("Config not initialized yet."); 
+                }
 
+                // 2. Fetch Stats (Global Views, Clicks, Countries)
                 try {
-                    const statDoc = await databases.getDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general');
+                    const statDoc = await databases.getDocument(
+                        APPWRITE_CONFIG.databaseId, 
+                        'stats', 
+                        'general'
+                    );
+                    
                     if (statDoc) {
                         STATS.totalViews = statDoc.totalViews || 0;
                         STATS.totalClicks = statDoc.totalClicks || 0;
+                        // Parse the stored JSON string for countries
                         STATS.countries = statDoc.countries ? JSON.parse(statDoc.countries) : {};
                     }
-                } catch(e) {}
+                } catch(e) {
+                    // If stats doc doesn't exist, try to create it
+                    try {
+                        await databases.createDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general', {
+                            totalViews: 0, totalClicks: 0, countries: "{}"
+                        });
+                    } catch(err) {}
+                }
 
+                // 3. Fetch Videos
                 const response = await databases.listDocuments(
-                    APPWRITE_CONFIG.databaseId, 
-                    APPWRITE_CONFIG.videoCollectionId, 
+                    APPWRITE_CONFIG.databaseId,
+                    APPWRITE_CONFIG.videoCollectionId,
                     [Query.orderDesc('$createdAt')]
                 );
 
@@ -416,13 +442,16 @@
                     thumb: doc.thumb,
                     views: doc.views || 0
                 }));
-                
+
+                // Shuffle and Filter
                 this.shuffleArray(ALL_VIDEOS);
                 this.filterContent();
 
                 if (app.currentView === 'admin-dashboard') app.renderAdminDashboard();
 
-            } catch (error) { console.error("Data load error:", error); }
+            } catch (error) {
+                console.error("Data load error:", error);
+            }
         },
 
         filterContent: function() {
@@ -497,9 +526,11 @@
         },
 
         loadPlayer: function(vid) {
+            // 1. Session Click Tracking
             SESSION.videosClicked++;
-            const shouldShowAd = (SESSION.videosClicked % 2 !== 0);
             
+            // 2. Prepare Ad Data
+            const shouldShowAd = (SESSION.videosClicked % 2 !== 0);
             app.adNextUrl = null;
             app.adNextIndex = -1;
 
@@ -513,16 +544,37 @@
                 }
             }
 
-            // DB Updates
-            databases.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, vid.id, { views: vid.views + 1 });
+            // --- DB UPDATES (PERSISTENCE) ---
+            
+            // A. Update Video specific views
+            databases.updateDocument(
+                APPWRITE_CONFIG.databaseId, 
+                APPWRITE_CONFIG.videoCollectionId, 
+                vid.id, 
+                { views: vid.views + 1 }
+            );
+
+            // B. Update Global Stats (Countries & Total Views)
+            STATS.totalViews++;
+            
             if (SESSION.userCountryName !== 'Unknown') {
+                // Increment local country count
                 STATS.countries[SESSION.userCountryName] = (STATS.countries[SESSION.userCountryName] || 0) + 1;
-                databases.updateDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general', {
-                    totalViews: STATS.totalViews + 1,
-                    countries: JSON.stringify(STATS.countries)
-                }).catch(e=>{});
             }
 
+            // Write back to DB
+            databases.updateDocument(
+                APPWRITE_CONFIG.databaseId, 
+                'stats', 
+                'general', 
+                {
+                    totalViews: STATS.totalViews,
+                    countries: JSON.stringify(STATS.countries)
+                }
+            ).catch(e => console.log("Stats update error", e));
+            // --------------------------------
+
+            // UI Setup
             this.navigateTo('player-view');
             document.getElementById('player-title').innerText = vid.title;
             document.getElementById('player-desc').innerText = vid.desc;
@@ -563,17 +615,39 @@
             frame.src = url;
             controlBox.innerHTML = '<div class="ad-loader"></div>';
 
+            // --- TRACKING LOGIC ---
             if (index > -1) {
+                // 1. Update Local State
                 AD_CONFIG[index].clicks++;
                 STATS.totalClicks++;
-                databases.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.configCollectionId, 'main', { adJson: JSON.stringify(AD_CONFIG) }).catch(()=>{});
-                databases.updateDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general', { totalClicks: STATS.totalClicks }).catch(()=>{});
+
+                // 2. Save Specific Link Clicks to Config Collection
+                databases.updateDocument(
+                    APPWRITE_CONFIG.databaseId, 
+                    APPWRITE_CONFIG.configCollectionId, 
+                    'main', 
+                    { 
+                        adJson: JSON.stringify(AD_CONFIG),
+                        // Also update adLink to current first one to satisfy constraints
+                        adLink: AD_CONFIG[0].url || "https://google.com" 
+                    }
+                ).catch(e => console.log("Ad click save failed", e));
+
+                // 3. Save Total Clicks to Stats Collection
+                databases.updateDocument(
+                    APPWRITE_CONFIG.databaseId, 
+                    'stats', 
+                    'general', 
+                    { totalClicks: STATS.totalClicks }
+                ).catch(e => console.log("Stats save failed", e));
             }
+            // ---------------------
 
             setTimeout(() => {
                 let timeLeft = 5;
                 const updateTimer = () => { controlBox.innerHTML = `<div class="ad-circle-btn">${timeLeft}</div>`; };
                 updateTimer();
+                
                 const interval = setInterval(() => {
                     timeLeft--;
                     if(timeLeft > 0) {
@@ -586,7 +660,6 @@
                 }, 1000);
             }, 2000);
         },
-
         closeAd: function() {
             document.getElementById('ad-view').style.display = 'none';
             document.getElementById('ad-frame').src = '';
