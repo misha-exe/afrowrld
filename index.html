@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Afrowrld</title>
+    <title>Afrowrld on Telegram</title>
     <link rel="stylesheet" href="https://cdn.fluidplayer.com/v3/current/fluidplayer.min.css" type="text/css"/>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
@@ -678,18 +678,27 @@
         },
 
         saveAdSettings: async function() {
+            // 1. Capture latest values from inputs
             document.querySelectorAll('.ad-url-input').forEach(input => {
                 const idx = parseInt(input.dataset.index);
-                if (AD_CONFIG[idx].url !== input.value) {
-                    AD_CONFIG[idx].url = input.value;
+                const newVal = input.value.trim();
+                
+                if (AD_CONFIG[idx].url !== newVal) {
+                    AD_CONFIG[idx].url = newVal;
                     AD_CONFIG[idx].clicks = 0;
                 }
             });
 
-            const payload = { adJson: JSON.stringify(AD_CONFIG) };
+            // 2. Prepare payload
+            // FIX: We send 'adLink' (using the first link) to satisfy the "Required" database rule.
+            // We also send 'adJson' which contains all 4 links for the rotation logic.
+            const payload = { 
+                adJson: JSON.stringify(AD_CONFIG),
+                adLink: AD_CONFIG[0].url && AD_CONFIG[0].url.length > 0 ? AD_CONFIG[0].url : "https://google.com" 
+            };
 
             try {
-                // Try Update
+                // Attempt to UPDATE existing 'main' document
                 await databases.updateDocument(
                     APPWRITE_CONFIG.databaseId, 
                     APPWRITE_CONFIG.configCollectionId, 
@@ -698,7 +707,14 @@
                 );
                 app.showPopup("Success", "Settings Updated", "");
             } catch(e) { 
-                // Try Create if update failed
+                // If Update fails (likely 404 Not Found or Attribute Missing), try to CREATE it
+                console.log("Update failed, attempting creation/check...", e);
+                
+                // If the error is about missing attribute 'adJson', warn the user
+                if(e.message.includes("adJson")) {
+                    return app.showPopup("Database Error", "You must create the 'adJson' String attribute in Appwrite Console!", "");
+                }
+
                 try {
                     await databases.createDocument(
                         APPWRITE_CONFIG.databaseId, 
@@ -709,12 +725,14 @@
                     app.showPopup("Success", "Settings Initialized", "");
                 } catch(createErr) {
                     console.error(createErr);
-                    app.showPopup("Error", "Check Permissions: " + createErr.message, "");
+                    app.showPopup("Error", createErr.message, "");
                 }
             }
+            
+            // 3. Refresh Dashboard UI
             app.renderAdminDashboard();
         },
-
+        
         handleUpload: async function() {
             const title = document.getElementById('vid-title').value;
             const desc = document.getElementById('vid-desc').value;
