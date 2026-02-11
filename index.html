@@ -357,9 +357,26 @@
         <div class="container fade-in">
             <h2 style="text-align: center; margin-top: 30px;">Upload Content</h2>
             <div class="admin-form">
-                <div class="input-group"><span class="input-label">Title</span><input type="text" id="vid-title" placeholder="Video Title"></div>
-                <div class="input-group"><span class="input-label">Description (Keywords for For You)</span><textarea id="vid-desc" placeholder="e.g. Ebony, Latina, Blonde..."></textarea></div>
-                <div class="input-group"><span class="input-label">Video File</span><input type="file" id="vid-file" accept="video/*"></div>
+                <div class="input-group">
+                    <span class="input-label">Video Title</span>
+                    <input type="text" id="vid-title" placeholder="Video Title">
+                </div>
+                
+                <div class="input-group">
+                    <span class="input-label">Description (Keywords for For You)</span>
+                    <textarea id="vid-desc" placeholder="e.g. Ebony, Latina, Blonde..."></textarea>
+                </div>
+
+                <div class="input-group">
+                    <span class="input-label">Thumbnail Image</span>
+                    <input type="file" id="thumb-file" accept="image/*">
+                </div>
+
+                <div class="input-group">
+                    <span class="input-label">Video File</span>
+                    <input type="file" id="vid-file" accept="video/*">
+                </div>
+
                 <p id="upload-status" style="font-size: 14px; color: var(--accent-primary); text-align: center;"></p>
                 <button class="btn-primary" onclick="app.handleUpload()">Upload</button>
             </div>
@@ -609,7 +626,7 @@
     });
 },
 
-        loadPlayer: function(vid) {
+loadPlayer: function(vid) {
             // 1. Session Click Tracking
             SESSION.videosClicked++;
             
@@ -628,37 +645,17 @@
                 }
             }
 
-            // --- DB UPDATES (PERSISTENCE) ---
-            
-            // A. Update Video specific views
-            databases.updateDocument(
-                APPWRITE_CONFIG.databaseId, 
-                APPWRITE_CONFIG.videoCollectionId, 
-                vid.id, 
-                { views: vid.views + 1 }
-            );
-
-            // B. Update Global Stats (Countries & Total Views)
-            STATS.totalViews++;
-            
+            // 3. DB Updates
+            databases.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, vid.id, { views: vid.views + 1 });
             if (SESSION.userCountryName !== 'Unknown') {
-                // Increment local country count
                 STATS.countries[SESSION.userCountryName] = (STATS.countries[SESSION.userCountryName] || 0) + 1;
+                databases.updateDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general', {
+                    totalViews: STATS.totalViews + 1,
+                    countries: JSON.stringify(STATS.countries)
+                }).catch(e=>{});
             }
 
-            // Write back to DB
-            databases.updateDocument(
-                APPWRITE_CONFIG.databaseId, 
-                'stats', 
-                'general', 
-                {
-                    totalViews: STATS.totalViews,
-                    countries: JSON.stringify(STATS.countries)
-                }
-            ).catch(e => console.log("Stats update error", e));
-            // --------------------------------
-
-            // UI Setup
+            // 4. UI Setup
             this.navigateTo('player-view');
             document.getElementById('player-title').innerText = vid.title;
             document.getElementById('player-desc').innerText = vid.desc;
@@ -670,10 +667,16 @@
             videoEl.style.width = '100%';
             videoEl.style.height = '100%';
             videoEl.src = vid.url;
+            videoEl.poster = vid.thumb; // <--- ADDED THIS LINE (Sets the poster image)
             wrapper.appendChild(videoEl);
 
             this.fluidInstance = fluidPlayer('fluid-player', {
-                layoutControls: { primaryColor: "#a855f7", fillToContainer: true, autoPlay: false } 
+                layoutControls: { 
+                    primaryColor: "#a855f7", 
+                    fillToContainer: true, 
+                    autoPlay: false,
+                    posterImage: vid.thumb // Explicitly set for Fluid Player config as well
+                } 
             });
 
             this.fluidInstance.on('play', function() {
@@ -686,7 +689,7 @@
             
             this.renderRelated(vid.id);
         },
-
+        
         triggerAdSequence: function(url, index) {
             this.adActive = true;
             this.adClosable = false;
@@ -899,39 +902,53 @@
         handleUpload: async function() {
             const title = document.getElementById('vid-title').value;
             const desc = document.getElementById('vid-desc').value;
-            const file = document.getElementById('vid-file').files[0];
+            const thumbInput = document.getElementById('thumb-file');
+            const fileInput = document.getElementById('vid-file');
             const btn = document.querySelector('#admin-upload .btn-primary');
             const status = document.getElementById('upload-status');
 
-            if(!title || !file) return app.showPopup("Error", "Missing file/title", "");
+            if(!title || !fileInput.files[0] || !thumbInput.files[0]) {
+                return app.showPopup("Error", "Missing title, thumbnail, or video file", "");
+            }
 
             btn.disabled = true;
-            status.innerText = "Uploading...";
+            status.innerText = "Uploading Content...";
 
             try {
-                const fileUpload = await storage.createFile(APPWRITE_CONFIG.bucketId, ID.unique(), file);
-                const fileUrl = storage.getFileView(APPWRITE_CONFIG.bucketId, fileUpload.$id);
-                const tempUrl = URL.createObjectURL(file);
-                const thumb = await app.generateThumbnail(tempUrl);
+                // 1. Upload Video
+                const videoFile = fileInput.files[0];
+                const videoUpload = await storage.createFile(APPWRITE_CONFIG.bucketId, ID.unique(), videoFile);
+                const videoUrl = storage.getFileView(APPWRITE_CONFIG.bucketId, videoUpload.$id);
 
+                // 2. Upload Thumbnail
+                const thumbFile = thumbInput.files[0];
+                const thumbUpload = await storage.createFile(APPWRITE_CONFIG.bucketId, ID.unique(), thumbFile);
+                const thumbUrl = storage.getFileView(APPWRITE_CONFIG.bucketId, thumbUpload.$id);
+
+                // 3. Create Document
                 await databases.createDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, ID.unique(), {
                     title: title,
                     category: 'general',
                     desc: desc,
-                    url: fileUrl.href,
-                    thumb: thumb,
-                    views: 0
+                    url: videoUrl.href,
+                    thumb: thumbUrl.href, // Stores the cloud URL of the uploaded image
+                    views: 0,
+                    watchTime: 0
                 });
 
                 status.innerText = "Success!";
                 setTimeout(() => {
                     btn.disabled = false;
                     status.innerText = "";
+                    // Clear inputs
                     document.getElementById('vid-title').value = "";
+                    document.getElementById('vid-desc').value = "";
                     document.getElementById('vid-file').value = "";
+                    document.getElementById('thumb-file').value = "";
                     app.navigateTo('admin-dashboard');
                 }, 1000);
             } catch(e) {
+                console.error(e);
                 status.innerText = "Failed: " + e.message;
                 btn.disabled = false;
             }
