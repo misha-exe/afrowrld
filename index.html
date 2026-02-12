@@ -184,14 +184,71 @@
         .popup-card, .gate-card { background: var(--bg-card); padding: 30px; border-radius: var(--radius-lg); border: 1px solid var(--border-color); max-width: 340px; text-align: center; animation: popIn 0.3s; }
         
         /* Ad Overlay - Fixed Z-Index */
-        #ad-view { 
-            position: fixed; 
-            inset: 0; 
-            background: #000; 
-            z-index: 2147483647 !important; /* Max Z-Index to stay on top */
-            display: none; 
-        }
-        #ad-frame { width: 100%; height: 100%; border: none; }
+        /* --- Modern Ad Overlay Styles --- */
+#ad-view { 
+    position: fixed; 
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: #000; 
+    z-index: 2147483647 !important; /* Max Z-Index */
+    display: none; 
+    flex-direction: column;
+}
+
+#ad-frame { 
+    width: 100%; 
+    height: 100%; 
+    border: none; 
+    position: absolute;
+    top: 0; left: 0;
+}
+
+#ad-control-box { 
+    position: absolute; 
+    top: 20px; 
+    right: 20px; 
+    z-index: 2147483648; 
+}
+
+/* Timer/Close Button Container */
+.ad-timer-badge {
+    width: 44px;
+    height: 44px;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    font-weight: 700;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* The Close Button (X) */
+.ad-close-btn {
+    background: var(--accent-gradient);
+    border-color: var(--accent-primary);
+    cursor: pointer;
+    transform: scale(0);
+    animation: popIn 0.3s forwards;
+}
+
+.ad-close-btn:hover {
+    transform: scale(1.1);
+}
+
+/* The Spinner */
+.ad-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 1s linear infinite;
+    }
         #ad-control-box { position: absolute; top: 20px; right: 20px; z-index: 2147483647; }
         .ad-circle-btn { width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,0.7); color: white; border: 2px solid white; display: flex; align-items: center; justify-content: center; font-weight: 800; cursor: default; pointer-events: none; }
         .ad-circle-btn.closable { background: var(--accent-gradient); border-color: var(--accent-primary); cursor: pointer; pointer-events: auto; }
@@ -414,7 +471,7 @@
     ];
     
     let STATS = { totalViews: 0, totalClicks: 0, countries: {} };
-    let SESSION = { userRegion: 'ROW', videosClicked: 0, userCountryName: 'Unknown' };
+    let SESSION = { userRegion: 'ROW', videosWatched: 0, globalAdIndex: 0, userCountryName: 'Unknown'};
 
     const app = {
         currentTab: 'foryou',
@@ -627,132 +684,163 @@
 },
 
 loadPlayer: function(vid) {
-            // 1. Session Click Tracking
-            SESSION.videosClicked++;
+    // UI Setup
+    this.navigateTo('player-view');
+    document.getElementById('player-title').innerText = vid.title;
+    document.getElementById('player-desc').innerText = vid.desc;
+    
+    // DB View Count Update
+    databases.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, vid.id, { views: vid.views + 1 });
+    
+    // Setup Video Element
+    const wrapper = document.getElementById('player-wrapper');
+    wrapper.innerHTML = '';
+    const videoEl = document.createElement('video');
+    videoEl.id = 'fluid-player';
+    videoEl.style.width = '100%';
+    videoEl.style.height = '100%';
+    videoEl.src = vid.url;
+    videoEl.poster = vid.thumb; 
+    wrapper.appendChild(videoEl);
+
+    // Initialize Player
+    this.fluidInstance = fluidPlayer('fluid-player', {
+        layoutControls: { 
+            primaryColor: "#a855f7", 
+            fillToContainer: true, 
+            autoPlay: false, // Ensure it doesn't auto start
+            posterImage: vid.thumb
+        } 
+    });
+
+    // --- NEW LOGIC: Intercept Play Event ---
+    let adForThisVideoShown = false; // Flag local to this specific video instance
+
+    this.fluidInstance.on('play', function() {
+        // If ad hasn't been shown yet for this video...
+        if (!adForThisVideoShown) {
             
-            // 2. Prepare Ad Data
-            const shouldShowAd = (SESSION.videosClicked % 2 !== 0);
-            app.adNextUrl = null;
-            app.adNextIndex = -1;
+            // 1. Increment global watch counter (1st, 2nd, 3rd...)
+            SESSION.videosWatched++;
 
-            if (shouldShowAd) {
-                const activeAds = AD_CONFIG.map((ad, idx) => ({ ...ad, originalIdx: idx })).filter(a => a.url && a.url.trim().length > 5);
-                if (activeAds.length > 0) {
-                    const sequenceNum = Math.floor((SESSION.videosClicked + 1) / 2) - 1; 
-                    const cycleIndex = sequenceNum % activeAds.length;
-                    app.adNextUrl = activeAds[cycleIndex].url;
-                    app.adNextIndex = activeAds[cycleIndex].originalIdx;
-                }
-            }
+            // 2. Check if Odd Number (1, 3, 5...)
+            const isOddSequence = (SESSION.videosWatched % 2 !== 0);
 
-            // 3. DB Updates
-            databases.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, vid.id, { views: vid.views + 1 });
-            if (SESSION.userCountryName !== 'Unknown') {
-                STATS.countries[SESSION.userCountryName] = (STATS.countries[SESSION.userCountryName] || 0) + 1;
-                databases.updateDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general', {
-                    totalViews: STATS.totalViews + 1,
-                    countries: JSON.stringify(STATS.countries)
-                }).catch(e=>{});
-            }
-
-            // 4. UI Setup
-            this.navigateTo('player-view');
-            document.getElementById('player-title').innerText = vid.title;
-            document.getElementById('player-desc').innerText = vid.desc;
-            
-            const wrapper = document.getElementById('player-wrapper');
-            wrapper.innerHTML = '';
-            const videoEl = document.createElement('video');
-            videoEl.id = 'fluid-player';
-            videoEl.style.width = '100%';
-            videoEl.style.height = '100%';
-            videoEl.src = vid.url;
-            videoEl.poster = vid.thumb; // <--- ADDED THIS LINE (Sets the poster image)
-            wrapper.appendChild(videoEl);
-
-            this.fluidInstance = fluidPlayer('fluid-player', {
-                layoutControls: { 
-                    primaryColor: "#a855f7", 
-                    fillToContainer: true, 
-                    autoPlay: false,
-                    posterImage: vid.thumb // Explicitly set for Fluid Player config as well
-                } 
-            });
-
-            this.fluidInstance.on('play', function() {
-                if (app.adNextUrl && !app.adActive) {
-                    app.fluidInstance.pause();
-                    app.triggerAdSequence(app.adNextUrl, app.adNextIndex);
-                    app.adNextUrl = null;
-                }
-            });
-            
-            this.renderRelated(vid.id);
-        },
-        
-        triggerAdSequence: function(url, index) {
-            this.adActive = true;
-            this.adClosable = false;
-            
-            const adView = document.getElementById('ad-view');
-            const frame = document.getElementById('ad-frame');
-            const controlBox = document.getElementById('ad-control-box');
-            
-            adView.style.display = 'block'; 
-            frame.src = url;
-            controlBox.innerHTML = '<div class="ad-loader"></div>';
-
-            // --- TRACKING LOGIC ---
-            if (index > -1) {
-                // 1. Update Local State
-                AD_CONFIG[index].clicks++;
-                STATS.totalClicks++;
-
-                // 2. Save Specific Link Clicks to Config Collection
-                databases.updateDocument(
-                    APPWRITE_CONFIG.databaseId, 
-                    APPWRITE_CONFIG.configCollectionId, 
-                    'main', 
-                    { 
-                        adJson: JSON.stringify(AD_CONFIG),
-                        // Also update adLink to current first one to satisfy constraints
-                        adLink: AD_CONFIG[0].url || "https://google.com" 
-                    }
-                ).catch(e => console.log("Ad click save failed", e));
-
-                // 3. Save Total Clicks to Stats Collection
-                databases.updateDocument(
-                    APPWRITE_CONFIG.databaseId, 
-                    'stats', 
-                    'general', 
-                    { totalClicks: STATS.totalClicks }
-                ).catch(e => console.log("Stats save failed", e));
-            }
-            // ---------------------
-
-            setTimeout(() => {
-                let timeLeft = 5;
-                const updateTimer = () => { controlBox.innerHTML = `<div class="ad-circle-btn">${timeLeft}</div>`; };
-                updateTimer();
+            if (isOddSequence) {
+                // Check if we have valid ads
+                const validAds = AD_CONFIG.filter(a => a.url && a.url.trim().length > 4);
                 
-                const interval = setInterval(() => {
-                    timeLeft--;
-                    if(timeLeft > 0) {
-                        updateTimer();
-                    } else {
-                        clearInterval(interval);
-                        app.adClosable = true;
-                        controlBox.innerHTML = `<div class="ad-circle-btn closable" onclick="app.closeAd()">✕</div>`;
-                    }
-                }, 1000);
-            }, 2000);
-        },
-        closeAd: function() {
-            document.getElementById('ad-view').style.display = 'none';
-            document.getElementById('ad-frame').src = '';
-            this.adActive = false;
-            if(this.fluidInstance) this.fluidInstance.play();
-        },
+                if (validAds.length > 0) {
+                    // Pause video immediately
+                    app.fluidInstance.pause();
+                    
+                    // Determine which ad to show based on global rotation
+                    // Use modulo to loop back to 0 after reaching the end
+                    const adToPlay = validAds[SESSION.globalAdIndex % validAds.length];
+                    
+                    // Increment rotation index for the NEXT time an ad is shown
+                    SESSION.globalAdIndex++;
+
+                    // Mark ad as shown so resuming doesn't loop
+                    adForThisVideoShown = true; 
+
+                    // Trigger the Overlay
+                    app.triggerAdSequence(adToPlay);
+                    return; 
+                }
+            }
+            
+            // If even number or no ads, just let video play & mark flag true
+            adForThisVideoShown = true;
+        }
+    });
+    
+    this.renderRelated(vid.id);
+},
+        
+        triggerAdSequence: function(adData) {
+    this.adActive = true;
+    
+    const adView = document.getElementById('ad-view');
+    const frame = document.getElementById('ad-frame');
+    const controlBox = document.getElementById('ad-control-box');
+    
+    // Show Overlay
+    adView.style.display = 'block'; 
+    frame.src = adData.url;
+    
+    // --- PHASE 1: Loading (2 Seconds) ---
+    // Show Spinner
+    controlBox.innerHTML = `<div class="ad-timer-badge"><div class="ad-spinner"></div></div>`;
+
+    // Track Ad Click internally
+    adData.clicks++;
+    STATS.totalClicks++;
+    this.saveStats(); // Helper to save to DB (see below)
+
+    setTimeout(() => {
+        // --- PHASE 2: Countdown (5 Seconds) ---
+        let timeLeft = 5;
+        
+        // Function to update the number
+        const updateTimer = (num) => {
+            controlBox.innerHTML = `<div class="ad-timer-badge">${num}</div>`;
+        };
+        updateTimer(timeLeft);
+
+        const countdownInterval = setInterval(() => {
+            timeLeft--;
+            if (timeLeft > 0) {
+                updateTimer(timeLeft);
+            } else {
+                // --- PHASE 3: Close Button ---
+                clearInterval(countdownInterval);
+                controlBox.innerHTML = `
+                    <div class="ad-timer-badge ad-close-btn" onclick="app.closeAd()">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </div>`;
+            }
+        }, 1000);
+
+    }, 2000); // End of 2 second loading phase
+},
+
+// Helper to save stats without cluttering main logic
+saveStats: function() {
+    // Update config stats
+    databases.updateDocument(
+        APPWRITE_CONFIG.databaseId, 
+        APPWRITE_CONFIG.configCollectionId, 
+        'main', 
+        { 
+            adJson: JSON.stringify(AD_CONFIG),
+            adLink: AD_CONFIG[0].url || "https://google.com"
+        }
+    ).catch(console.error);
+    
+    // Update general stats
+    databases.updateDocument(
+        APPWRITE_CONFIG.databaseId, 
+        'stats', 
+        'general', 
+        { totalClicks: STATS.totalClicks }
+    ).catch(console.error);
+},
+
+closeAd: function() {
+    const adView = document.getElementById('ad-view');
+    const frame = document.getElementById('ad-frame');
+    
+    // Hide overlay
+    adView.style.display = 'none';
+    frame.src = 'about:blank'; // Clear iframe to stop audio/video from ad
+    this.adActive = false;
+    
+    // Resume Main Video
+    if(this.fluidInstance) {
+        this.fluidInstance.play();
+    }
+},
 
         renderRelated: function(currentId) {
     const grid = document.getElementById('related-grid');
