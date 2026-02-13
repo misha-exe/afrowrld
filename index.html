@@ -442,24 +442,29 @@
 
 <script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1"></script>
 
-<script>
-    const { Client, Account, Databases, Storage, ID, Query } = Appwrite;
+<script src="https://cdn.jsdelivr.net/npm/appwrite@14.0.1"></script>
 
-    // --- CONFIGURATION ---
+<script>
+    // --- APPWRITE SDK & CONFIGURATION ---
+    const { Client, Account, Databases, Storage, ID, Query, Functions } = Appwrite;
+
     const APPWRITE_CONFIG = {
-        projectId: "698e4496001841867aa8",
-        databaseId: "698e454000182489db0e",
+        projectId: "698f0cd0001f4942659c",
+        databaseId: "698f1af90006323451cf",
         videoCollectionId: "videos",
         configCollectionId: "config",
-        bucketId: "698e4923000620efd5f6"       
+        r2FunctionId: "698f12c1000472a74586" 
     };
 
-    const client = new Client().setEndpoint('https://cloud.appwrite.io/v1').setProject(APPWRITE_CONFIG.projectId);
+    const client = new Client()
+        .setEndpoint('https://cloud.appwrite.io/v1')
+        .setProject(APPWRITE_CONFIG.projectId);
+
     const account = new Account(client);
     const databases = new Databases(client);
-    const storage = new Storage(client);
+    const functions = new Functions(client);
 
-    // --- STATE ---
+    // --- STATE MANAGEMENT ---
     let ALL_VIDEOS = [];
     let FILTERED_VIDEOS = { foryou: [], explore: [] };
     
@@ -480,8 +485,6 @@
         adActive: false,
         adClosable: false,
         fluidInstance: null,
-        adNextUrl: null, 
-        adNextIndex: -1, 
 
         init: async function() {
             if (window.Telegram && window.Telegram.WebApp) {
@@ -493,6 +496,8 @@
             await this.detectLocation();
             await this.refreshData();
             app.renderGrid();
+            
+            // Close menus when clicking outside
             window.onclick = (e) => {
                 if (!e.target.closest('.menu-btn')) {
                     document.querySelectorAll('.video-menu-dropdown').forEach(d => d.classList.remove('show'));
@@ -500,15 +505,17 @@
             }
         },
 
+        // --- LOCATION DETECTION ---
         detectLocation: async function() {
             try {
                 const res = await fetch('https://ipapi.co/json/');
                 const data = await res.json();
                 SESSION.userCountryName = data.country_name || "Unknown";
+                // AFRO Region Codes
                 const afroCodes = ['NG', 'GH', 'KE', 'ZA', 'JM', 'BB', 'TT', 'BS', 'UG', 'ZW', 'TZ'];
                 SESSION.userRegion = afroCodes.includes(data.country_code) ? 'AFRO' : 'ROW';
             } catch (e) {
-                console.log("Loc detect failed");
+                console.log("Loc detect failed, defaulting to ROW");
             }
         },
         
@@ -519,9 +526,10 @@
             }
         },
 
+        // --- DATA SYNC ---
         refreshData: async function() {
             try {
-                // --- 1. CONFIG INITIALIZATION (Ads) ---
+                // 1. Load Ad Config
                 try {
                     const confDoc = await databases.getDocument(
                         APPWRITE_CONFIG.databaseId, 
@@ -530,56 +538,23 @@
                     );
                     if (confDoc.adJson) {
                         const parsed = JSON.parse(confDoc.adJson);
-                        // Merge saved data with default structure
                         AD_CONFIG = AD_CONFIG.map((def, i) => parsed[i] || def);
                     }
                 } catch(e) { 
-                    // IF CONFIG DOES NOT EXIST, CREATE IT NOW
-                    console.log("Config doc not found. Creating 'main'...");
-                    try {
-                        await databases.createDocument(
-                            APPWRITE_CONFIG.databaseId, 
-                            APPWRITE_CONFIG.configCollectionId, 
-                            'main', 
-                            { 
-                                adJson: JSON.stringify(AD_CONFIG),
-                                adLink: "https://google.com" // Placeholder required by DB
-                            }
-                        );
-                    } catch(createErr) { console.error("Config Creation Failed:", createErr); }
+                    console.log("Config not found, using defaults.");
                 }
 
-                // --- 2. STATS INITIALIZATION (Views/Clicks/Countries) ---
+                // 2. Load Stats
                 try {
-                    const statDoc = await databases.getDocument(
-                        APPWRITE_CONFIG.databaseId, 
-                        'stats', 
-                        'general'
-                    );
-                    
+                    const statDoc = await databases.getDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general');
                     if (statDoc) {
                         STATS.totalViews = statDoc.totalViews || 0;
                         STATS.totalClicks = statDoc.totalClicks || 0;
                         STATS.countries = statDoc.countries ? JSON.parse(statDoc.countries) : {};
                     }
-                } catch(e) {
-                    // IF STATS DOC DOES NOT EXIST, CREATE IT NOW
-                    console.log("Stats doc not found. Creating 'general'...");
-                    try {
-                        await databases.createDocument(
-                            APPWRITE_CONFIG.databaseId, 
-                            'stats', 
-                            'general', 
-                            {
-                                totalViews: 0, 
-                                totalClicks: 0, 
-                                countries: "{}" 
-                            }
-                        );
-                    } catch(createErr) { console.error("Stats Creation Failed:", createErr); }
-                }
+                } catch(e) { console.log("Stats not found."); }
 
-                // --- 3. FETCH VIDEOS ---
+                // 3. Fetch Videos
                 const response = await databases.listDocuments(
                     APPWRITE_CONFIG.databaseId,
                     APPWRITE_CONFIG.videoCollectionId,
@@ -595,7 +570,6 @@
                     views: doc.views || 0
                 }));
 
-                // Shuffle & Filter
                 this.shuffleArray(ALL_VIDEOS);
                 this.filterContent();
 
@@ -608,14 +582,16 @@
         
         filterContent: function() {
             FILTERED_VIDEOS.explore = [...ALL_VIDEOS];
-            const afroKeywords = ['ebony', 'mixed', 'interracial', 'black'];
-            const rowKeywords = ['blonde', 'redhead', 'latina', 'mixed', 'interracial', 'white'];
+            const afroKeywords = ['ebony', 'mixed', 'interracial', 'black', 'african'];
+            const rowKeywords = ['blonde', 'redhead', 'latina', 'white', 'asian'];
             const targetKeywords = (SESSION.userRegion === 'AFRO') ? afroKeywords : rowKeywords;
 
             FILTERED_VIDEOS.foryou = ALL_VIDEOS.filter(vid => targetKeywords.some(k => vid.desc.includes(k)));
+            // Fallback if empty
             if (FILTERED_VIDEOS.foryou.length === 0) FILTERED_VIDEOS.foryou = [...ALL_VIDEOS];
         },
 
+        // --- NAVIGATION ---
         navigateTo: function(viewId) {
             if (this.currentView === 'player-view' && viewId !== 'player-view') this.destroyPlayer();
             if (viewId === 'admin-dashboard') this.refreshData();
@@ -642,7 +618,8 @@
                 const prev = app.history.pop();
                 if (app.currentView === 'player-view') app.destroyPlayer();
                 if (app.currentView === 'admin-dashboard') {
-                    account.deleteSession('current').then(() => app.switchViewInternal('home-view'));
+                    // Logout on back from dashboard
+                    account.deleteSession('current').finally(() => app.switchViewInternal('home-view'));
                 } else {
                     app.switchViewInternal(prev);
                 }
@@ -658,227 +635,173 @@
             this.renderGrid();
         },
 
+        // --- RENDER GRID ---
         renderGrid: function() {
-    const grid = document.getElementById('video-grid');
-    grid.innerHTML = '';
-    const videos = FILTERED_VIDEOS[this.currentTab];
-    
-    if (!videos || videos.length === 0) {
-        grid.innerHTML = '<div style="grid-column:span 2; text-align:center; padding:20px; color:#666;">No videos found.</div>';
-        return;
-    }
-
-    videos.forEach(vid => {
-        const card = document.createElement('div');
-        card.className = 'video-card';
-        card.onclick = () => app.loadPlayer(vid);
-        // Updated HTML structure to match nsty
-        card.innerHTML = `
-            <img src="${vid.thumb}" alt="${vid.title}">
-            <div class="video-info">
-                <div class="video-title">${vid.title}</div>
-            </div>
-        `;
-        grid.appendChild(card);
-    });
-},
-
-loadPlayer: function(vid) {
-    // UI Setup
-    this.navigateTo('player-view');
-    document.getElementById('player-title').innerText = vid.title;
-    document.getElementById('player-desc').innerText = vid.desc;
-    
-    // DB View Count Update
-    databases.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, vid.id, { views: vid.views + 1 });
-    
-    // Setup Video Element
-    const wrapper = document.getElementById('player-wrapper');
-    wrapper.innerHTML = '';
-    const videoEl = document.createElement('video');
-    videoEl.id = 'fluid-player';
-    videoEl.style.width = '100%';
-    videoEl.style.height = '100%';
-    videoEl.src = vid.url;
-    videoEl.poster = vid.thumb; 
-    wrapper.appendChild(videoEl);
-
-    // Initialize Player
-    this.fluidInstance = fluidPlayer('fluid-player', {
-        layoutControls: { 
-            primaryColor: "#a855f7", 
-            fillToContainer: true, 
-            autoPlay: false, // Ensure it doesn't auto start
-            posterImage: vid.thumb
-        } 
-    });
-
-    // --- NEW LOGIC: Intercept Play Event ---
-    let adForThisVideoShown = false; // Flag local to this specific video instance
-
-    this.fluidInstance.on('play', function() {
-        // If ad hasn't been shown yet for this video...
-        if (!adForThisVideoShown) {
+            const grid = document.getElementById('video-grid');
+            grid.innerHTML = '';
+            const videos = FILTERED_VIDEOS[this.currentTab];
             
-            // 1. Increment global watch counter (1st, 2nd, 3rd...)
-            SESSION.videosWatched++;
+            if (!videos || videos.length === 0) {
+                grid.innerHTML = '<div style="grid-column:span 2; text-align:center; padding:20px; color:#666;">No videos found.</div>';
+                return;
+            }
 
-            // 2. Check if Odd Number (1, 3, 5...)
-            const isOddSequence = (SESSION.videosWatched % 2 !== 0);
+            videos.forEach(vid => {
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.onclick = () => app.loadPlayer(vid);
+                card.innerHTML = `
+                    <div class="thumb-container">
+                        <img src="${vid.thumb}" alt="${vid.title}">
+                    </div>
+                    <div class="video-info">
+                        <div class="video-title">${vid.title}</div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        },
 
-            if (isOddSequence) {
-                // Check if we have valid ads
-                const validAds = AD_CONFIG.filter(a => a.url && a.url.trim().length > 4);
-                
-                if (validAds.length > 0) {
-                    // Pause video immediately
-                    app.fluidInstance.pause();
-                    
-                    // Determine which ad to show based on global rotation
-                    // Use modulo to loop back to 0 after reaching the end
-                    const adToPlay = validAds[SESSION.globalAdIndex % validAds.length];
-                    
-                    // Increment rotation index for the NEXT time an ad is shown
-                    SESSION.globalAdIndex++;
+        // --- PLAYER LOGIC ---
+        loadPlayer: function(vid) {
+            this.navigateTo('player-view');
+            document.getElementById('player-title').innerText = vid.title;
+            document.getElementById('player-desc').innerText = vid.desc;
+            
+            // Increment Views in DB
+            databases.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, vid.id, { views: vid.views + 1 });
+            
+            const wrapper = document.getElementById('player-wrapper');
+            wrapper.innerHTML = '';
+            const videoEl = document.createElement('video');
+            videoEl.id = 'fluid-player';
+            videoEl.style.width = '100%';
+            videoEl.style.height = '100%';
+            videoEl.src = vid.url; // R2 URL
+            videoEl.poster = vid.thumb; // R2 URL
+            wrapper.appendChild(videoEl);
 
-                    // Mark ad as shown so resuming doesn't loop
-                    adForThisVideoShown = true; 
+            this.fluidInstance = fluidPlayer('fluid-player', {
+                layoutControls: { 
+                    primaryColor: "#a855f7", 
+                    fillToContainer: true, 
+                    autoPlay: false,
+                    posterImage: vid.thumb
+                } 
+            });
 
-                    // Trigger the Overlay
-                    app.triggerAdSequence(adToPlay);
-                    return; 
+            // Ad Logic Hook
+            let adForThisVideoShown = false;
+            this.fluidInstance.on('play', function() {
+                if (!adForThisVideoShown) {
+                    SESSION.videosWatched++;
+                    const isOddSequence = (SESSION.videosWatched % 2 !== 0);
+
+                    if (isOddSequence) {
+                        const validAds = AD_CONFIG.filter(a => a.url && a.url.trim().length > 4);
+                        if (validAds.length > 0) {
+                            app.fluidInstance.pause();
+                            const adToPlay = validAds[SESSION.globalAdIndex % validAds.length];
+                            SESSION.globalAdIndex++;
+                            adForThisVideoShown = true; 
+                            app.triggerAdSequence(adToPlay);
+                            return; 
+                        }
+                    }
+                    adForThisVideoShown = true;
                 }
-            }
+            });
             
-            // If even number or no ads, just let video play & mark flag true
-            adForThisVideoShown = true;
-        }
-    });
-    
-    this.renderRelated(vid.id);
-},
+            this.renderRelated(vid.id);
+        },
         
+        // --- AD SYSTEM ---
         triggerAdSequence: function(adData) {
-    this.adActive = true;
-    
-    const adView = document.getElementById('ad-view');
-    const frame = document.getElementById('ad-frame');
-    const controlBox = document.getElementById('ad-control-box');
-    
-    // Show Overlay
-    adView.style.display = 'block'; 
-    frame.src = adData.url;
-    
-    // --- PHASE 1: Loading (2 Seconds) ---
-    // Show Spinner
-    controlBox.innerHTML = `<div class="ad-timer-badge"><div class="ad-spinner"></div></div>`;
+            this.adActive = true;
+            const adView = document.getElementById('ad-view');
+            const frame = document.getElementById('ad-frame');
+            const controlBox = document.getElementById('ad-control-box');
+            
+            adView.style.display = 'block'; 
+            frame.src = adData.url;
+            
+            // Loading Phase
+            controlBox.innerHTML = `<div class="ad-timer-badge"><div class="ad-spinner"></div></div>`;
+            adData.clicks++;
+            STATS.totalClicks++;
+            this.saveStats();
 
-    // Track Ad Click internally
-    adData.clicks++;
-    STATS.totalClicks++;
-    this.saveStats(); // Helper to save to DB (see below)
-
-    setTimeout(() => {
-        // --- PHASE 2: Countdown (5 Seconds) ---
-        let timeLeft = 5;
-        
-        // Function to update the number
-        const updateTimer = (num) => {
-            controlBox.innerHTML = `<div class="ad-timer-badge">${num}</div>`;
-        };
-        updateTimer(timeLeft);
-
-        const countdownInterval = setInterval(() => {
-            timeLeft--;
-            if (timeLeft > 0) {
+            setTimeout(() => {
+                let timeLeft = 5;
+                const updateTimer = (num) => { controlBox.innerHTML = `<div class="ad-timer-badge">${num}</div>`; };
                 updateTimer(timeLeft);
-            } else {
-                // --- PHASE 3: Close Button ---
-                clearInterval(countdownInterval);
-                controlBox.innerHTML = `
-                    <div class="ad-timer-badge ad-close-btn" onclick="app.closeAd()">
-                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                    </div>`;
-            }
-        }, 1000);
 
-    }, 2000); // End of 2 second loading phase
-},
+                const countdownInterval = setInterval(() => {
+                    timeLeft--;
+                    if (timeLeft > 0) {
+                        updateTimer(timeLeft);
+                    } else {
+                        clearInterval(countdownInterval);
+                        controlBox.innerHTML = `
+                            <div class="ad-timer-badge ad-close-btn" onclick="app.closeAd()">
+                                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </div>`;
+                        app.adClosable = true;
+                    }
+                }, 1000);
+            }, 2000);
+        },
 
-// Helper to save stats without cluttering main logic
-saveStats: function() {
-    // Update config stats
-    databases.updateDocument(
-        APPWRITE_CONFIG.databaseId, 
-        APPWRITE_CONFIG.configCollectionId, 
-        'main', 
-        { 
-            adJson: JSON.stringify(AD_CONFIG),
-            adLink: AD_CONFIG[0].url || "https://google.com"
-        }
-    ).catch(console.error);
-    
-    // Update general stats
-    databases.updateDocument(
-        APPWRITE_CONFIG.databaseId, 
-        'stats', 
-        'general', 
-        { totalClicks: STATS.totalClicks }
-    ).catch(console.error);
-},
+        saveStats: function() {
+            databases.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.configCollectionId, 'main', { 
+                adJson: JSON.stringify(AD_CONFIG),
+                adLink: AD_CONFIG[0].url || "https://google.com"
+            }).catch(console.error);
+            
+            databases.updateDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general', { 
+                totalClicks: STATS.totalClicks 
+            }).catch(console.error);
+        },
 
-closeAd: function() {
-    const adView = document.getElementById('ad-view');
-    const frame = document.getElementById('ad-frame');
-    
-    // Hide overlay
-    adView.style.display = 'none';
-    frame.src = 'about:blank'; // Clear iframe to stop audio/video from ad
-    this.adActive = false;
-    
-    // Resume Main Video
-    if(this.fluidInstance) {
-        this.fluidInstance.play();
-    }
-},
+        closeAd: function() {
+            document.getElementById('ad-view').style.display = 'none';
+            document.getElementById('ad-frame').src = 'about:blank';
+            this.adActive = false;
+            this.adClosable = false;
+            if(this.fluidInstance) this.fluidInstance.play();
+        },
 
         renderRelated: function(currentId) {
-    const grid = document.getElementById('related-grid');
-    grid.innerHTML = '';
-    const list = ALL_VIDEOS.filter(v => v.id !== currentId).sort(() => 0.5 - Math.random()).slice(0, 4);
-    list.forEach(vid => {
-        const card = document.createElement('div');
-        card.className = 'video-card';
-        card.onclick = () => app.loadPlayer(vid);
-        // Updated HTML structure to match nsty
-        card.innerHTML = `
-            <img src="${vid.thumb}" alt="${vid.title}">
-            <div class="video-info">
-                <div class="video-title">${vid.title}</div>
-            </div>
-        `;
-        grid.appendChild(card);
-    });
-},
+            const grid = document.getElementById('related-grid');
+            grid.innerHTML = '';
+            const list = ALL_VIDEOS.filter(v => v.id !== currentId).sort(() => 0.5 - Math.random()).slice(0, 4);
+            list.forEach(vid => {
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.onclick = () => app.loadPlayer(vid);
+                card.innerHTML = `
+                    <div class="thumb-container"><img src="${vid.thumb}"></div>
+                    <div class="video-info"><div class="video-title">${vid.title}</div></div>
+                `;
+                grid.appendChild(card);
+            });
+        },
 
         destroyPlayer: function() {
             if(this.fluidInstance) { this.fluidInstance.destroy(); this.fluidInstance = null; }
         },
 
-        // --- ADMIN ---
+        // --- ADMIN & UPLOAD ---
         loginAdmin: async function() {
             const email = document.getElementById('admin-email').value;
             const pass = document.getElementById('admin-pass').value;
             try {
-                // Check if session exists (to handle 'session already active' error)
+                // Check if session exists first
                 try {
                     await account.get(); 
-                    // If we get here, user is already logged in
                     app.navigateTo('admin-dashboard');
                     return;
-                } catch(e) {
-                    // Not logged in, proceed to create session
-                }
+                } catch(e) { /* Proceed to login */ }
 
                 await account.createEmailPasswordSession(email, pass);
                 app.navigateTo('admin-dashboard');
@@ -922,9 +845,7 @@ closeAd: function() {
                                 <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
                             </button>
                             <div id="menu-${vid.id}" class="video-menu-dropdown">
-                                <button class="menu-option danger" onclick="app.deleteVideo('${vid.id}')">
-                                    <svg viewBox="0 0 24 24" stroke="currentColor" fill="none"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg> Delete
-                                </button>
+                                <button class="menu-option danger" onclick="app.deleteVideo('${vid.id}')">Delete</button>
                             </div>
                         </div>
                     </div>`;
@@ -932,61 +853,75 @@ closeAd: function() {
         },
 
         saveAdSettings: async function() {
-            // 1. Capture latest values from inputs
             document.querySelectorAll('.ad-url-input').forEach(input => {
                 const idx = parseInt(input.dataset.index);
                 const newVal = input.value.trim();
-                
                 if (AD_CONFIG[idx].url !== newVal) {
                     AD_CONFIG[idx].url = newVal;
                     AD_CONFIG[idx].clicks = 0;
                 }
             });
 
-            // 2. Prepare payload
-            // FIX: We send 'adLink' (using the first link) to satisfy the "Required" database rule.
-            // We also send 'adJson' which contains all 4 links for the rotation logic.
-            const payload = { 
-                adJson: JSON.stringify(AD_CONFIG),
-                adLink: AD_CONFIG[0].url && AD_CONFIG[0].url.length > 0 ? AD_CONFIG[0].url : "https://google.com" 
-            };
-
             try {
-                // Attempt to UPDATE existing 'main' document
                 await databases.updateDocument(
                     APPWRITE_CONFIG.databaseId, 
                     APPWRITE_CONFIG.configCollectionId, 
                     'main', 
-                    payload
+                    { 
+                        adJson: JSON.stringify(AD_CONFIG),
+                        adLink: AD_CONFIG[0].url || "https://google.com" 
+                    }
                 );
                 app.showPopup("Success", "Settings Updated", "");
+                app.renderAdminDashboard();
             } catch(e) { 
-                // If Update fails (likely 404 Not Found or Attribute Missing), try to CREATE it
-                console.log("Update failed, attempting creation/check...", e);
-                
-                // If the error is about missing attribute 'adJson', warn the user
-                if(e.message.includes("adJson")) {
-                    return app.showPopup("Database Error", "You must create the 'adJson' String attribute in Appwrite Console!", "");
-                }
-
-                try {
-                    await databases.createDocument(
-                        APPWRITE_CONFIG.databaseId, 
-                        APPWRITE_CONFIG.configCollectionId, 
-                        'main', 
-                        payload
-                    );
-                    app.showPopup("Success", "Settings Initialized", "");
-                } catch(createErr) {
-                    console.error(createErr);
-                    app.showPopup("Error", createErr.message, "");
-                }
+                app.showPopup("Error", e.message, "");
             }
-            
-            // 3. Refresh Dashboard UI
-            app.renderAdminDashboard();
         },
+
+        // --- NEW: CLOUDFLARE R2 UPLOAD LOGIC ---
         
+        // Helper: Gets a Signed URL from Appwrite, then uploads directly to R2
+        uploadToR2: async function(file) {
+            if (!file) return null;
+
+            // 1. Request Signed URL from Appwrite Function
+            // Payload must match what the function expects
+            const execution = await functions.createExecution(
+                APPWRITE_CONFIG.r2FunctionId,
+                JSON.stringify({ 
+                    fileName: file.name, 
+                    fileType: file.type 
+                }),
+                false // Async: false (we wait for result)
+            );
+
+            // 2. Parse the Function Response
+            if (execution.status !== 'completed') {
+                throw new Error("Function failed: " + execution.status);
+            }
+
+            const response = JSON.parse(execution.responseBody);
+            
+            if (response.error) {
+                throw new Error("R2 Auth Error: " + response.error);
+            }
+
+            // 3. Upload directly to Cloudflare R2 using the signed URL
+            const uploadRes = await fetch(response.uploadUrl, {
+                method: 'PUT',
+                headers: { 'Content-Type': file.type },
+                body: file
+            });
+
+            if (!uploadRes.ok) {
+                throw new Error("Cloudflare Upload Failed: " + uploadRes.statusText);
+            }
+
+            // 4. Return the Public URL (CDN Link)
+            return response.publicUrl;
+        },
+
         handleUpload: async function() {
             const title = document.getElementById('vid-title').value;
             const desc = document.getElementById('vid-desc').value;
@@ -999,35 +934,38 @@ closeAd: function() {
                 return app.showPopup("Error", "Missing title, thumbnail, or video file", "");
             }
 
+            // Lock UI
             btn.disabled = true;
-            status.innerText = "Uploading Content...";
+            status.innerText = "Starting secure upload...";
 
             try {
-                // 1. Upload Video
-                const videoFile = fileInput.files[0];
-                const videoUpload = await storage.createFile(APPWRITE_CONFIG.bucketId, ID.unique(), videoFile);
-                const videoUrl = storage.getFileView(APPWRITE_CONFIG.bucketId, videoUpload.$id);
+                // 1. Upload Video to R2
+                status.innerText = "Uploading Video to Cloudflare (Step 1/3)...";
+                const videoUrl = await app.uploadToR2(fileInput.files[0]);
 
-                // 2. Upload Thumbnail
-                const thumbFile = thumbInput.files[0];
-                const thumbUpload = await storage.createFile(APPWRITE_CONFIG.bucketId, ID.unique(), thumbFile);
-                const thumbUrl = storage.getFileView(APPWRITE_CONFIG.bucketId, thumbUpload.$id);
+                // 2. Upload Thumbnail to R2
+                status.innerText = "Uploading Thumbnail to Cloudflare (Step 2/3)...";
+                const thumbUrl = await app.uploadToR2(thumbInput.files[0]);
 
-                // 3. Create Document
+                // 3. Create Database Record
+                status.innerText = "Saving to Database (Step 3/3)...";
                 await databases.createDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, ID.unique(), {
                     title: title,
                     category: 'general',
                     desc: desc,
-                    url: videoUrl.href,
-                    thumb: thumbUrl.href, // Stores the cloud URL of the uploaded image
+                    url: videoUrl, // Stores "https://pub-xxx.r2.dev/..."
+                    thumb: thumbUrl,
                     views: 0,
                     watchTime: 0
                 });
 
                 status.innerText = "Success!";
+                status.style.color = "var(--success)";
+                
                 setTimeout(() => {
                     btn.disabled = false;
                     status.innerText = "";
+                    status.style.color = "var(--accent-primary)";
                     // Clear inputs
                     document.getElementById('vid-title').value = "";
                     document.getElementById('vid-desc').value = "";
@@ -1035,59 +973,16 @@ closeAd: function() {
                     document.getElementById('thumb-file').value = "";
                     app.navigateTo('admin-dashboard');
                 }, 1000);
+
             } catch(e) {
                 console.error(e);
-                status.innerText = "Failed: " + e.message;
+                status.innerText = "Upload Failed: " + e.message;
+                status.style.color = "var(--danger)";
                 btn.disabled = false;
             }
         },
-
-        generateThumbnail: function(videoUrl) {
-    return new Promise((resolve) => {
-        const video = document.createElement('video');
-        video.src = videoUrl;
-        video.muted = true;
-        video.playsInline = true;
-        video.crossOrigin = "anonymous";
-        video.currentTime = 2; // Capture at 2 seconds
-
-        video.onloadeddata = () => {
-            setTimeout(() => {
-                const canvas = document.createElement('canvas');
-                // Set high quality landscape resolution
-                canvas.width = 1280;
-                canvas.height = 720;
-                const ctx = canvas.getContext('2d');
-
-                // Calculate ratios to center-crop (preventing compression)
-                const videoRatio = video.videoWidth / video.videoHeight;
-                const targetRatio = canvas.width / canvas.height;
-                
-                let sx, sy, sWidth, sHeight;
-
-                if (videoRatio > targetRatio) {
-                    // Source is wider (e.g. 21:9)
-                    sHeight = video.videoHeight;
-                    sWidth = sHeight * targetRatio;
-                    sx = (video.videoWidth - sWidth) / 2;
-                    sy = 0;
-                } else {
-                    // Source is taller (e.g. 9:16 TikTok style)
-                    sWidth = video.videoWidth;
-                    sHeight = sWidth / targetRatio;
-                    sx = 0;
-                    sy = (video.videoHeight - sHeight) / 2;
-                }
-
-                ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, canvas.width, canvas.height);
-                // Export as high-quality JPEG
-                resolve(canvas.toDataURL('image/jpeg', 0.9));
-            }, 1000);
-        };
-        video.onerror = () => resolve("https://via.placeholder.com/1280x720/000?text=Error");
-    });
-},
         
+        // --- UTILS ---
         toggleMenu: function(e, id) { e.stopPropagation(); document.querySelectorAll('.video-menu-dropdown').forEach(d=>d.classList.remove('show')); document.getElementById(`menu-${id}`).classList.toggle('show'); },
         
         togglePassVisibility: function() { 
@@ -1103,14 +998,14 @@ closeAd: function() {
         },
         
         deleteVideo: async function(id) {
-            if(confirm("Delete?")) {
+            if(confirm("Delete this video permanently?")) {
                 try {
                     await databases.deleteDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, id);
                     app.refreshData();
-                } catch(e) {}
+                } catch(e) { app.showPopup("Error", "Could not delete video", ""); }
             }
         },
-        dismissAgeGate: function() { document.getElementById('age-gate').style.display='none'; app.updateBackButton(); },
+        dismissAgeGate: function() { document.getElementById('age-gate').style.display='none'; },
         showPopup: function(t, m, i) { document.getElementById('pop-title').innerText=t; document.getElementById('pop-msg').innerText=m; document.getElementById('custom-popup').style.display='flex'; },
         closePopup: function() { document.getElementById('custom-popup').style.display='none'; }
     };
