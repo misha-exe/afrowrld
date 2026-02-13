@@ -762,7 +762,7 @@
             videoEl.src = vid.url; 
             videoEl.poster = vid.thumb; 
             
-            // --- NEW: TELEGRAM POPUP LOGIC START ---
+            // --- TELEGRAM POPUP LOGIC ---
             let tgPopupShown = false;
             const POPUP_TRIGGER_TIME = 15; // Show after 15 seconds
 
@@ -774,7 +774,6 @@
                     document.getElementById('telegram-popup').style.display = 'flex';
                 }
             });
-            // --- NEW: TELEGRAM POPUP LOGIC END ---
 
             wrapper.appendChild(videoEl);
 
@@ -787,11 +786,47 @@
                 } 
             });
 
-            // (Keep your existing Ad Logic here...)
-            let adForThisVideoShown = false;
+            // --- INSERTED AD LOGIC START ---
+            let adForThisVideoShown = false; // Flag local to this specific video instance
+
             this.fluidInstance.on('play', function() {
-                 // ... existing ad code ...
+                // If ad hasn't been shown yet for this video...
+                if (!adForThisVideoShown) {
+                    
+                    // 1. Increment global watch counter (1st, 2nd, 3rd...)
+                    SESSION.videosWatched++;
+
+                    // 2. Check if Odd Number (1, 3, 5...)
+                    const isOddSequence = (SESSION.videosWatched % 2 !== 0);
+
+                    if (isOddSequence) {
+                        // Check if we have valid ads
+                        const validAds = AD_CONFIG.filter(a => a.url && a.url.trim().length > 4);
+                        
+                        if (validAds.length > 0) {
+                            // Pause video immediately
+                            app.fluidInstance.pause();
+                            
+                            // Determine which ad to show based on global rotation
+                            const adToPlay = validAds[SESSION.globalAdIndex % validAds.length];
+                            
+                            // Increment rotation index for the NEXT time an ad is shown
+                            SESSION.globalAdIndex++;
+
+                            // Mark ad as shown so resuming doesn't loop
+                            adForThisVideoShown = true; 
+
+                            // Trigger the Overlay
+                            app.triggerAdSequence(adToPlay);
+                            return; 
+                        }
+                    }
+                    
+                    // If even number or no ads, just let video play & mark flag true
+                    adForThisVideoShown = true;
+                }
             });
+            // --- INSERTED AD LOGIC END ---
             
             this.renderRelated(vid.id);
         },
