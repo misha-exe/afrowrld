@@ -587,6 +587,8 @@
         // --- DATA SYNC (FIXED: Auto-create docs if missing) ---
         refreshData: async function() {
             try {
+                const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
+
                 // 1. Load Ad Config
                 try {
                     const confDoc = await databases.getDocument(
@@ -599,43 +601,47 @@
                         AD_CONFIG = AD_CONFIG.map((def, i) => parsed[i] || def);
                     }
                 } catch(e) { 
-                    // If 'main' config doesn't exist, create it
                     if (e.code === 404) {
-                        console.log("Config not found. Creating 'main'...");
                         await databases.createDocument(
                             APPWRITE_CONFIG.databaseId, 
                             APPWRITE_CONFIG.configCollectionId, 
                             'main', 
-                            { 
-                                adJson: JSON.stringify(AD_CONFIG),
-                                adLink: "https://google.com" // Default required field
-                            }
-                        ).catch(err => console.error("Init Config Failed:", err));
+                            { adJson: JSON.stringify(AD_CONFIG), adLink: "https://google.com" }
+                        );
                     }
                 }
 
-                // 2. Load Stats
+                // 2. Load Stats & Handle Midnight Reset
                 try {
                     const statDoc = await databases.getDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general');
                     if (statDoc) {
-                        STATS.totalViews = statDoc.totalViews || 0;
-                        STATS.totalClicks = statDoc.totalClicks || 0;
+                        // Check if today is different from the last saved date
+                        if (statDoc.lastResetDate !== today) {
+                            console.log("New day detected. Resetting stats...");
+                            STATS.totalViews = statDoc.totalViews || 0; // Keep views, they are usually lifetime
+                            STATS.totalClicks = 0; // Reset Clicks
+                            STATS.lastResetDate = today;
+                            
+                            // Reset individual ad clicks
+                            AD_CONFIG.forEach(ad => ad.clicks = 0);
+                            
+                            // Save the reset immediately
+                            this.saveStats();
+                        } else {
+                            STATS.totalViews = statDoc.totalViews || 0;
+                            STATS.totalClicks = statDoc.totalClicks || 0;
+                            STATS.lastResetDate = statDoc.lastResetDate;
+                        }
                         STATS.countries = statDoc.countries ? JSON.parse(statDoc.countries) : {};
                     }
                 } catch(e) { 
-                    // If 'general' stats doesn't exist, create it
                     if (e.code === 404) {
-                        console.log("Stats not found. Creating 'general'...");
                         await databases.createDocument(
                             APPWRITE_CONFIG.databaseId, 
                             'stats', 
                             'general', 
-                            { 
-                                totalViews: 0,
-                                totalClicks: 0,
-                                countries: "{}"
-                            }
-                        ).catch(err => console.error("Init Stats Failed:", err));
+                            { totalViews: 0, totalClicks: 0, lastResetDate: today, countries: "{}" }
+                        );
                     }
                 }
 
@@ -839,9 +845,20 @@
             frame.src = adData.url;
             
             controlBox.innerHTML = `<div class="ad-timer-badge"><div class="ad-spinner"></div></div>`;
-            adData.clicks++;
+            
+            // --- TRACKING UPDATE START ---
+            // 1. Find the specific ad object in the main config array to ensure we update the master list
+            const adIndex = AD_CONFIG.findIndex(a => a.url === adData.url);
+            if(adIndex > -1) {
+                AD_CONFIG[adIndex].clicks = (AD_CONFIG[adIndex].clicks || 0) + 1;
+            }
+
+            // 2. Update Global Stats
             STATS.totalClicks++;
+
+            // 3. Save to DB immediately
             this.saveStats();
+            // --- TRACKING UPDATE END ---
 
             setTimeout(() => {
                 let timeLeft = 5;
@@ -863,10 +880,12 @@
                 }, 1000);
             }, 2000);
         },
-
+        
         // FIXED: Handles saving stats even if doc was missing initially
         saveStats: function() {
-            // Update Config
+            const today = new Date().toISOString().split('T')[0];
+
+            // Update Config (Individual Ad Clicks)
             const configPayload = { 
                 adJson: JSON.stringify(AD_CONFIG),
                 adLink: AD_CONFIG[0].url || "https://google.com"
@@ -879,12 +898,20 @@
                     }
                 });
             
-            // Update Stats
-            const statsPayload = { totalClicks: STATS.totalClicks };
+            // Update Stats (Global Clicks + Date)
+            const statsPayload = { 
+                totalClicks: STATS.totalClicks,
+                lastResetDate: STATS.lastResetDate || today
+            };
+            
             databases.updateDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general', statsPayload)
                 .catch(e => {
                      if(e.code === 404) {
-                         databases.createDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general', { ...statsPayload, totalViews: STATS.totalViews, countries: "{}" });
+                         databases.createDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general', { 
+                             ...statsPayload, 
+                             totalViews: STATS.totalViews, 
+                             countries: "{}" 
+                        });
                      }
                 });
         },
