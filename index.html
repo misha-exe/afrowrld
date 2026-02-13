@@ -497,7 +497,6 @@
             await this.refreshData();
             app.renderGrid();
             
-            // Close menus when clicking outside
             window.onclick = (e) => {
                 if (!e.target.closest('.menu-btn')) {
                     document.querySelectorAll('.video-menu-dropdown').forEach(d => d.classList.remove('show'));
@@ -511,7 +510,6 @@
                 const res = await fetch('https://ipapi.co/json/');
                 const data = await res.json();
                 SESSION.userCountryName = data.country_name || "Unknown";
-                // AFRO Region Codes
                 const afroCodes = ['NG', 'GH', 'KE', 'ZA', 'JM', 'BB', 'TT', 'BS', 'UG', 'ZW', 'TZ'];
                 SESSION.userRegion = afroCodes.includes(data.country_code) ? 'AFRO' : 'ROW';
             } catch (e) {
@@ -526,7 +524,7 @@
             }
         },
 
-        // --- DATA SYNC ---
+        // --- DATA SYNC (FIXED: Auto-create docs if missing) ---
         refreshData: async function() {
             try {
                 // 1. Load Ad Config
@@ -541,7 +539,19 @@
                         AD_CONFIG = AD_CONFIG.map((def, i) => parsed[i] || def);
                     }
                 } catch(e) { 
-                    console.log("Config not found, using defaults.");
+                    // If 'main' config doesn't exist, create it
+                    if (e.code === 404) {
+                        console.log("Config not found. Creating 'main'...");
+                        await databases.createDocument(
+                            APPWRITE_CONFIG.databaseId, 
+                            APPWRITE_CONFIG.configCollectionId, 
+                            'main', 
+                            { 
+                                adJson: JSON.stringify(AD_CONFIG),
+                                adLink: "https://google.com" // Default required field
+                            }
+                        ).catch(err => console.error("Init Config Failed:", err));
+                    }
                 }
 
                 // 2. Load Stats
@@ -552,7 +562,22 @@
                         STATS.totalClicks = statDoc.totalClicks || 0;
                         STATS.countries = statDoc.countries ? JSON.parse(statDoc.countries) : {};
                     }
-                } catch(e) { console.log("Stats not found."); }
+                } catch(e) { 
+                    // If 'general' stats doesn't exist, create it
+                    if (e.code === 404) {
+                        console.log("Stats not found. Creating 'general'...");
+                        await databases.createDocument(
+                            APPWRITE_CONFIG.databaseId, 
+                            'stats', 
+                            'general', 
+                            { 
+                                totalViews: 0,
+                                totalClicks: 0,
+                                countries: "{}"
+                            }
+                        ).catch(err => console.error("Init Stats Failed:", err));
+                    }
+                }
 
                 // 3. Fetch Videos
                 const response = await databases.listDocuments(
@@ -587,7 +612,6 @@
             const targetKeywords = (SESSION.userRegion === 'AFRO') ? afroKeywords : rowKeywords;
 
             FILTERED_VIDEOS.foryou = ALL_VIDEOS.filter(vid => targetKeywords.some(k => vid.desc.includes(k)));
-            // Fallback if empty
             if (FILTERED_VIDEOS.foryou.length === 0) FILTERED_VIDEOS.foryou = [...ALL_VIDEOS];
         },
 
@@ -618,7 +642,6 @@
                 const prev = app.history.pop();
                 if (app.currentView === 'player-view') app.destroyPlayer();
                 if (app.currentView === 'admin-dashboard') {
-                    // Logout on back from dashboard
                     account.deleteSession('current').finally(() => app.switchViewInternal('home-view'));
                 } else {
                     app.switchViewInternal(prev);
@@ -651,12 +674,8 @@
                 card.className = 'video-card';
                 card.onclick = () => app.loadPlayer(vid);
                 card.innerHTML = `
-                    <div class="thumb-container">
-                        <img src="${vid.thumb}" alt="${vid.title}">
-                    </div>
-                    <div class="video-info">
-                        <div class="video-title">${vid.title}</div>
-                    </div>
+                    <div class="thumb-container"><img src="${vid.thumb}" alt="${vid.title}"></div>
+                    <div class="video-info"><div class="video-title">${vid.title}</div></div>
                 `;
                 grid.appendChild(card);
             });
@@ -668,7 +687,7 @@
             document.getElementById('player-title').innerText = vid.title;
             document.getElementById('player-desc').innerText = vid.desc;
             
-            // Increment Views in DB
+            // Increment Views
             databases.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, vid.id, { views: vid.views + 1 });
             
             const wrapper = document.getElementById('player-wrapper');
@@ -677,8 +696,8 @@
             videoEl.id = 'fluid-player';
             videoEl.style.width = '100%';
             videoEl.style.height = '100%';
-            videoEl.src = vid.url; // R2 URL
-            videoEl.poster = vid.thumb; // R2 URL
+            videoEl.src = vid.url; 
+            videoEl.poster = vid.thumb; 
             wrapper.appendChild(videoEl);
 
             this.fluidInstance = fluidPlayer('fluid-player', {
@@ -690,14 +709,11 @@
                 } 
             });
 
-            // Ad Logic Hook
             let adForThisVideoShown = false;
             this.fluidInstance.on('play', function() {
                 if (!adForThisVideoShown) {
                     SESSION.videosWatched++;
-                    const isOddSequence = (SESSION.videosWatched % 2 !== 0);
-
-                    if (isOddSequence) {
+                    if (SESSION.videosWatched % 2 !== 0) {
                         const validAds = AD_CONFIG.filter(a => a.url && a.url.trim().length > 4);
                         if (validAds.length > 0) {
                             app.fluidInstance.pause();
@@ -725,7 +741,6 @@
             adView.style.display = 'block'; 
             frame.src = adData.url;
             
-            // Loading Phase
             controlBox.innerHTML = `<div class="ad-timer-badge"><div class="ad-spinner"></div></div>`;
             adData.clicks++;
             STATS.totalClicks++;
@@ -752,15 +767,29 @@
             }, 2000);
         },
 
+        // FIXED: Handles saving stats even if doc was missing initially
         saveStats: function() {
-            databases.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.configCollectionId, 'main', { 
+            // Update Config
+            const configPayload = { 
                 adJson: JSON.stringify(AD_CONFIG),
                 adLink: AD_CONFIG[0].url || "https://google.com"
-            }).catch(console.error);
+            };
+
+            databases.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.configCollectionId, 'main', configPayload)
+                .catch(e => {
+                    if(e.code === 404) {
+                        databases.createDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.configCollectionId, 'main', configPayload);
+                    }
+                });
             
-            databases.updateDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general', { 
-                totalClicks: STATS.totalClicks 
-            }).catch(console.error);
+            // Update Stats
+            const statsPayload = { totalClicks: STATS.totalClicks };
+            databases.updateDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general', statsPayload)
+                .catch(e => {
+                     if(e.code === 404) {
+                         databases.createDocument(APPWRITE_CONFIG.databaseId, 'stats', 'general', { ...statsPayload, totalViews: STATS.totalViews, countries: "{}" });
+                     }
+                });
         },
 
         closeAd: function() {
@@ -796,12 +825,11 @@
             const email = document.getElementById('admin-email').value;
             const pass = document.getElementById('admin-pass').value;
             try {
-                // Check if session exists first
                 try {
                     await account.get(); 
                     app.navigateTo('admin-dashboard');
                     return;
-                } catch(e) { /* Proceed to login */ }
+                } catch(e) { }
 
                 await account.createEmailPasswordSession(email, pass);
                 app.navigateTo('admin-dashboard');
@@ -852,6 +880,7 @@
             });
         },
 
+        // FIXED: Create 'main' doc if it doesn't exist
         saveAdSettings: async function() {
             document.querySelectorAll('.ad-url-input').forEach(input => {
                 const idx = parseInt(input.dataset.index);
@@ -862,41 +891,54 @@
                 }
             });
 
+            const payload = { 
+                adJson: JSON.stringify(AD_CONFIG),
+                adLink: AD_CONFIG[0].url || "https://google.com" 
+            };
+
             try {
                 await databases.updateDocument(
                     APPWRITE_CONFIG.databaseId, 
                     APPWRITE_CONFIG.configCollectionId, 
                     'main', 
-                    { 
-                        adJson: JSON.stringify(AD_CONFIG),
-                        adLink: AD_CONFIG[0].url || "https://google.com" 
-                    }
+                    payload
                 );
                 app.showPopup("Success", "Settings Updated", "");
                 app.renderAdminDashboard();
             } catch(e) { 
-                app.showPopup("Error", e.message, "");
+                if(e.code === 404) {
+                    try {
+                        await databases.createDocument(
+                            APPWRITE_CONFIG.databaseId, 
+                            APPWRITE_CONFIG.configCollectionId, 
+                            'main', 
+                            payload
+                        );
+                        app.showPopup("Success", "Settings Created", "");
+                        app.renderAdminDashboard();
+                    } catch(createErr) {
+                        app.showPopup("Error", createErr.message, "");
+                    }
+                } else {
+                    app.showPopup("Error", e.message, "");
+                }
             }
         },
 
-        // --- NEW: CLOUDFLARE R2 UPLOAD LOGIC ---
-        
-        // Helper: Gets a Signed URL from Appwrite, then uploads directly to R2
+        // --- R2 UPLOAD HELPERS ---
         uploadToR2: async function(file) {
             if (!file) return null;
 
-            // 1. Request Signed URL from Appwrite Function
-            // Payload must match what the function expects
+            // 1. Get Signed URL
             const execution = await functions.createExecution(
                 APPWRITE_CONFIG.r2FunctionId,
                 JSON.stringify({ 
                     fileName: file.name, 
                     fileType: file.type 
                 }),
-                false // Async: false (we wait for result)
+                false
             );
 
-            // 2. Parse the Function Response
             if (execution.status !== 'completed') {
                 throw new Error("Function failed: " + execution.status);
             }
@@ -907,7 +949,7 @@
                 throw new Error("R2 Auth Error: " + response.error);
             }
 
-            // 3. Upload directly to Cloudflare R2 using the signed URL
+            // 2. Upload to Cloudflare
             const uploadRes = await fetch(response.uploadUrl, {
                 method: 'PUT',
                 headers: { 'Content-Type': file.type },
@@ -918,7 +960,6 @@
                 throw new Error("Cloudflare Upload Failed: " + uploadRes.statusText);
             }
 
-            // 4. Return the Public URL (CDN Link)
             return response.publicUrl;
         },
 
@@ -934,26 +975,25 @@
                 return app.showPopup("Error", "Missing title, thumbnail, or video file", "");
             }
 
-            // Lock UI
             btn.disabled = true;
             status.innerText = "Starting secure upload...";
 
             try {
-                // 1. Upload Video to R2
+                // 1. Upload Video
                 status.innerText = "Uploading Video to Cloudflare (Step 1/3)...";
                 const videoUrl = await app.uploadToR2(fileInput.files[0]);
 
-                // 2. Upload Thumbnail to R2
+                // 2. Upload Thumbnail
                 status.innerText = "Uploading Thumbnail to Cloudflare (Step 2/3)...";
                 const thumbUrl = await app.uploadToR2(thumbInput.files[0]);
 
-                // 3. Create Database Record
+                // 3. Save to DB
                 status.innerText = "Saving to Database (Step 3/3)...";
                 await databases.createDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.videoCollectionId, ID.unique(), {
                     title: title,
                     category: 'general',
                     desc: desc,
-                    url: videoUrl, // Stores "https://pub-xxx.r2.dev/..."
+                    url: videoUrl,
                     thumb: thumbUrl,
                     views: 0,
                     watchTime: 0
@@ -966,7 +1006,6 @@
                     btn.disabled = false;
                     status.innerText = "";
                     status.style.color = "var(--accent-primary)";
-                    // Clear inputs
                     document.getElementById('vid-title').value = "";
                     document.getElementById('vid-desc').value = "";
                     document.getElementById('vid-file').value = "";
