@@ -349,7 +349,7 @@
     <!-- Ad Overlay -->
     <div id="ad-view">
         <div id="ad-control-box"></div>
-        <iframe id="ad-frame" sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-top-navigation"></iframe>
+        <iframe id="ad-frame" sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-top-navigation allow-modals allow-popups-to-escape-sandbox allow-presentation"></iframe>
     </div>
 
     <!-- Telegram Channel Popup -->
@@ -830,39 +830,53 @@
         
         // --- AD SYSTEM ---
         triggerAdSequence: function(adData) {
-            this.adActive = true;
-            const adView = document.getElementById('ad-view');
-            const frame = document.getElementById('ad-frame');
-            const controlBox = document.getElementById('ad-control-box');
-            
-            adView.style.display = 'block'; 
-            frame.src = adData.url;
-            
-            controlBox.innerHTML = `<div class="ad-timer-badge"><div class="ad-spinner"></div></div>`;
-            adData.clicks++;
-            STATS.totalClicks++;
-            this.saveStats();
+    this.adActive = true;
+    const adView = document.getElementById('ad-view');
+    const frame = document.getElementById('ad-frame');
+    const controlBox = document.getElementById('ad-control-box');
+    
+    // 1. CLEAR previous iframe content to prevent ghosting
+    frame.src = 'about:blank';
 
-            setTimeout(() => {
-                let timeLeft = 5;
-                const updateTimer = (num) => { controlBox.innerHTML = `<div class="ad-timer-badge">${num}</div>`; };
+    // 2. SHOW the element first (Critical for iOS/Android rendering)
+    adView.style.display = 'flex'; // Changed from 'block' to 'flex' to keep your centering logic
+    
+    // 3. CACHE BUSTER: Add a random number to the URL to force a fresh load
+    // This checks if the URL already has a '?' and adds the appropriate separator
+    const separator = adData.url.includes('?') ? '&' : '?';
+    const freshUrl = `${adData.url}${separator}_cb=${Date.now()}`;
+
+    // 4. LOAD the URL after a tiny delay to ensure the div is rendered
+    setTimeout(() => {
+        frame.src = freshUrl;
+    }, 50);
+    
+    // Set up the timer/loading UI
+    controlBox.innerHTML = `<div class="ad-timer-badge"><div class="ad-spinner"></div></div>`;
+    adData.clicks++;
+    STATS.totalClicks++;
+    this.saveStats();
+
+    setTimeout(() => {
+        let timeLeft = 5;
+        const updateTimer = (num) => { controlBox.innerHTML = `<div class="ad-timer-badge">${num}</div>`; };
+        updateTimer(timeLeft);
+
+        const countdownInterval = setInterval(() => {
+            timeLeft--;
+            if (timeLeft > 0) {
                 updateTimer(timeLeft);
-
-                const countdownInterval = setInterval(() => {
-                    timeLeft--;
-                    if (timeLeft > 0) {
-                        updateTimer(timeLeft);
-                    } else {
-                        clearInterval(countdownInterval);
-                        controlBox.innerHTML = `
-                            <div class="ad-timer-badge ad-close-btn" onclick="app.closeAd()">
-                                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                            </div>`;
-                        app.adClosable = true;
-                    }
-                }, 1000);
-            }, 2000);
-        },
+            } else {
+                clearInterval(countdownInterval);
+                controlBox.innerHTML = `
+                    <div class="ad-timer-badge ad-close-btn" onclick="app.closeAd()">
+                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </div>`;
+                app.adClosable = true;
+            }
+        }, 1000);
+    }, 2000);
+},
 
         // FIXED: Handles saving stats even if doc was missing initially
         saveStats: function() {
