@@ -402,8 +402,8 @@
     <!-- Main View -->
     <main id="home-view" class="view active">
         <div class="tab-container">
-            <div class="tab active" onclick="app.switchTab('explore')">Explore</div>
-            <div class="tab" onclick="app.switchTab('foryou')">For You</div>
+            <div class="tab active" onclick="app.switchTab('foryou')">For You</div>
+            <div class="tab" onclick="app.switchTab('explore')">Explore</div>
         </div>
         <div id="main-loader">
             <div class="main-spinner"></div>
@@ -699,12 +699,16 @@
         
         filterContent: function() {
             FILTERED_VIDEOS.explore = [...ALL_VIDEOS];
+            /* --- DISABLED COUNTRY FILTERING ---
             const afroKeywords = ['ebony', 'mixed', 'interracial', 'black', 'african'];
             const rowKeywords = ['blonde', 'redhead', 'latina', 'white', 'asian'];
             const targetKeywords = (SESSION.userRegion === 'AFRO') ? afroKeywords : rowKeywords;
 
             FILTERED_VIDEOS.foryou = ALL_VIDEOS.filter(vid => targetKeywords.some(k => vid.desc.includes(k)));
             if (FILTERED_VIDEOS.foryou.length === 0) FILTERED_VIDEOS.foryou = [...ALL_VIDEOS];
+            ------------------------------------- */
+            // Show ALL videos in 'For You' tab instead of filtering
+            FILTERED_VIDEOS.foryou =[...ALL_VIDEOS];
         },
 
         // --- NAVIGATION ---
@@ -839,7 +843,9 @@
                         
                         if (validAds.length > 0) {
                             // Pause video immediately
+                            /* --- DISABLED PAUSE AND OVERLAY ---
                             app.fluidInstance.pause();
+                            -------------------------------------- */
                             
                             // Determine which ad to show based on global rotation
                             const adToPlay = validAds[SESSION.globalAdIndex % validAds.length];
@@ -851,7 +857,7 @@
                             adForThisVideoShown = true; 
 
                             // Trigger the Overlay
-                            app.triggerAdSequence(adToPlay);
+                            app.triggerPopunder(adToPlay);
                             return; 
                         }
                     }
@@ -866,6 +872,7 @@
         },
         
         // --- AD SYSTEM ---
+        /* --- DISABLED TIMER / AD OVERLAY ---
         triggerAdSequence: function(adData) {
     this.adActive = true;
     const adView = document.getElementById('ad-view');
@@ -914,6 +921,28 @@
         }, 1000);
     }, 2000);
 },
+--------------------------------------- */
+        // --- NEW POPUNDER SYSTEM ---
+        triggerPopunder: function(adData) {
+            // Update the stats normally
+            adData.clicks++;
+            STATS.totalClicks++;
+            this.saveStats();
+
+            // Cache buster
+            const separator = adData.url.includes('?') ? '&' : '?';
+            const freshUrl = `${adData.url}${separator}_cb=${Date.now()}`;
+
+            // Open the Ad link in a new background tab (Popunder logic)
+            const popunder = window.Telegram.WebApp.openLink(freshUrl, '_blank');
+            if (popunder) {
+                // Focus the parent window so the video stays active and the ad stays behind
+                window.focus();
+                popunder.blur();
+            } else {
+                console.log("Popunder blocked by browser.");
+            }
+        },
 
         // FIXED: Handles saving stats even if doc was missing initially
         saveStats: function() {
